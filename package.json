@@ -1,0 +1,24 @@
+{
+  "name": "ez-migrate",
+  "version": "0.0.1",
+  "description": "A easy library for make SQL migrations",
+  "main": "dist/index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "pnpm exec tsc",
+    "migrate": "node --run build && node dist/index.js"
+  },
+  "keywords": [
+    "migrations",
+    "SQL"
+  ],
+  "author": "Leonardo Bazán Márquez",
+  "license": "ISC",
+  "packageManager": "pnpm@10.7.1",
+  "devDependencies": {
+    "@eslint/js": "^9.24.0",
+    "eslint": "^9.24.0",
+    "typescript": "^5.8.3",
+    "typescript-eslint": "^8.29.0"
+  }
+}
