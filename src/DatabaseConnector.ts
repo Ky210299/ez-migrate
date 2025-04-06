@@ -24,7 +24,8 @@ class DatabaseConnector {
             if (await this.connection.isConnected())
                 console.log(this.connection.SGDBName + " is connected successfuly");
         } catch (err) {
-            console.error("Error connecting ", this.connection.SGDBName, ":\n", err);
+            console.error("Error connecting ", this.connection.SGDBName, ":\n\n");
+            throw err
         }
     }
 }
