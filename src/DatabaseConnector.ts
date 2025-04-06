@@ -1,5 +1,6 @@
-interface Connection {
+export interface Connection {
     isConnected: () => Promise<boolean>;
+    runSQL: (sql: string) => Promise<void>;
 }
 type MySQLConnection = Connection & {
     SGDBName: string;
@@ -18,6 +19,14 @@ class DatabaseConnector {
             ...connection,
         };
     }
+    async runSQL(sql: string): Promise<void> {
+        try {
+            await this.connection.runSQL(sql);
+            console.log("SQL runned successfuly!\n");
+        } catch (err) {
+            console.error("Error running SQL:\n", err);
+        }
+    }
 
     async testConnection() {
         try {
@@ -25,7 +34,7 @@ class DatabaseConnector {
                 console.log(this.connection.SGDBName + " is connected successfuly");
         } catch (err) {
             console.error("Error connecting ", this.connection.SGDBName, ":\n\n");
-            throw err
+            throw err;
         }
     }
 }
