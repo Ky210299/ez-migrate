@@ -6,7 +6,7 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "build": "pnpm exec tsc",
-    "migrate": "node --run build && node dist/index.js"
+    "migrate": "node --run build && node dist/ez-migrate.js"
   },
   "keywords": [
     "migrations",
@@ -21,8 +21,5 @@
     "eslint": "^9.24.0",
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.29.0"
-  },
-  "dependencies": {
-    "sqlite3": "5.1.7"
   }
 }
