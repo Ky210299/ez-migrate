@@ -36,4 +36,4 @@ class ConfigReader {
     }
 }
 
-export default ConfigReader;
+export default new ConfigReader();
