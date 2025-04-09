@@ -5,6 +5,21 @@ export type Migration = {
     direction: 1 | 0; // 1 up and 0 down
     orderNumber: number;
 };
+export const TABLE_NAME = "ez_migration";
+/**
+ *  Don't put semicolon at the end of the schema query to
+ *  allow comparing with the one that returns the databases
+ */
+export const TRACKER_SCHEMA = `
+    CREATE TABLE ${TABLE_NAME} (
+        id INT UNSIGNED,
+        sql TEXT NOT NULL,
+        date DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        direction TINYINT NOT NULL,
+        order_number INT UNSIGNED NOT NULL UNIQUE,
+        PRIMARY KEY (id)
+    )
+    `.trim();
 export type Commit = () => Promise<void>;
 export type Rollback = () => Promise<void>;
 
