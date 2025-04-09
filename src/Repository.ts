@@ -1,10 +1,4 @@
-export type Migration = {
-    id: string;
-    sql: string;
-    date: string;
-    direction: 1 | 0; // 1 up and 0 down
-    orderNumber: number;
-};
+import Migration from "./Migration";
 export const TABLE_NAME = "ez_migration";
 /**
  *  Don't put semicolon at the end of the schema query to
