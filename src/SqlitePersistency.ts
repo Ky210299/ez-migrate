@@ -1,45 +1,85 @@
-import sqlite from "sqlite3";
-import type { Database } from "sqlite3";
-import type { Persistency, Migration, Commit, Rollback } from "./Repository.js";
+import sqlite from "node:sqlite";
+import type { DatabaseSync } from "node:sqlite";
+import {
+    Persistency,
+    TRACKER_SCHEMA,
+    Migration,
+    Commit,
+    Rollback,
+    TABLE_NAME,
+} from "./Repository.js";
+import ConfigReader from "./ConfigReader.js";
 
-class SqlitePersistency implements Persistency {
-    private readonly MIGRATION_TABLE = "ez_migrations";
+export class SqlitePersistency implements Persistency {
+    private readonly MIGRATION_TABLE = TABLE_NAME;
     private readonly MIGRATION_COLUMNS = ["id", "sql", "date", "direction", "order_number"];
+    private readonly db: DatabaseSync;
 
-    private readonly db: Database;
-    constructor(dbPath: string) {
-        this.db = new sqlite.Database(dbPath);
-    }
-    async save(migrations: Array<Migration>) {
-        this.db.exec("BEGIN TRANSACTION");
-        const values = [];
-        for (const m of migrations) {
-            values.push([m.id, m.sql, m.date, m.direction, m.orderNumber]);
+    constructor() {
+        const { dbPath, migrationPath } = ConfigReader.getConfig();
+
+        let path = "";
+        if (dbPath != null && typeof dbPath === "string") {
+            const hasSlash = dbPath.endsWith("/");
+            path = dbPath + (hasSlash ? "" : "/");
+        } else if (migrationPath != null && typeof migrationPath === "string") {
+            const hasSlash = migrationPath.endsWith("/");
+            path = migrationPath + (hasSlash ? "" : "/");
+        } else path = "./migrations/";
+
+        this.db = new sqlite.DatabaseSync(`${path}tracker.db`);
+
+        const query = this.db.prepare(`
+            SELECT * FROM sqlite_schema
+            WHERE 
+                type = 'table' AND
+                name = '${this.MIGRATION_TABLE}'
+        `);
+        const currentSchema = query.get();
+
+        if (currentSchema == null) this.db.exec(TRACKER_SCHEMA);
+        else if (currentSchema.sql !== TRACKER_SCHEMA) {
+            throw new Error(
+                `Invalid Schema:\ncurrent: ${currentSchema.sql}\nvs\nneeded: ${TRACKER_SCHEMA}`,
+            );
         }
-        this.db.exec(`
-            INSERT INTO ${this.MIGRATION_TABLE}
-            VALUES ${values.map((migrations, i) => {
-                `(${migrations.flat().join(",")})${i >= values.length - 1 ? ";" : ","}`;
-            })}
+    }
+    async save(migrations: Array<Migration>): Promise<{ commit: Commit; rollback: Rollback }> {
+        this.db.exec("BEGIN TRANSACTION");
+
+        const placeholders = new Array(migrations.length)
+            .fill("(" + new Array(this.MIGRATION_COLUMNS.length).fill("?").join(",") + ")")
+            .join(",");
+
+        const insert = this.db.prepare(`
+            INSERT INTO ${this.MIGRATION_TABLE} (${this.MIGRATION_COLUMNS.join(",")})
+            VALUES ${placeholders}
             `);
 
-        const commit: Commit = async () => {
-            this.db.exec("COMMIT");
-            return;
-        };
-        const rollback: Rollback = async () => {
-            this.db.exec("ROLLBACK");
-            return;
-        };
+        const values = migrations.flatMap((m) => Object.values(m));
+
+        if (values.length !== migrations.length * this.MIGRATION_COLUMNS.length) {
+            throw new Error("Mismatch in values and placeholders count");
+        }
+
+        // Returns commit or rollback function that will be used
+        // when the migration is done successfuly (commit) or not (rollback)
+        const commit = async () => this.db.exec("COMMIT");
+        const rollback = async () => this.db.exec("ROLLBACK");
+
+        try {
+            insert.run(...values);
+        } catch (err) {
+            console.error(err);
+            rollback();
+            process.exit("Error saving the migration");
+        }
         return { commit, rollback };
     }
     async list(): Promise<Array<Migration>> {
-        let results;
-        this.db.all(`SELECT * FROM ${this.MIGRATION_TABLE}`, (err, rows: Migration[]) => {
-            if (err != null) throw err;
-            else results = rows;
-        });
-        return (results as unknown as Migration[]) ?? [];
+        const query = this.db.prepare(`
+            SELECT * FROM ${this.MIGRATION_TABLE};
+            `);
+        return query.all() as Migration[];
     }
 }
-sqlite.verbose();
