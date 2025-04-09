@@ -2,12 +2,12 @@ import sqlite from "node:sqlite";
 import type { DatabaseSync } from "node:sqlite";
 import { Persistency, TRACKER_SCHEMA, Commit, Rollback, TABLE_NAME } from "./Repository.js";
 
-import Migration from "./Migration.js";
+import Migration, { MigrationData } from "./Migration.js";
 import ConfigReader from "./ConfigReader.js";
 
 export class SqlitePersistency implements Persistency {
     private readonly MIGRATION_TABLE = TABLE_NAME;
-    private readonly MIGRATION_COLUMNS = ["id", "sql", "date", "direction", "order_number"];
+    private readonly MIGRATION_COLUMNS = ["migrated_at", "up", "down", "path"];
     private readonly db: DatabaseSync;
 
     constructor() {
@@ -39,7 +39,7 @@ export class SqlitePersistency implements Persistency {
             );
         }
     }
-    async save(migrations: Array<Migration>): Promise<{ commit: Commit; rollback: Rollback }> {
+    async save(migrations: Array<MigrationData>): Promise<{ commit: Commit; rollback: Rollback }> {
         this.db.exec("BEGIN TRANSACTION");
 
         const placeholders = new Array(migrations.length)
