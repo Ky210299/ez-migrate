@@ -1,13 +1,8 @@
 import sqlite from "node:sqlite";
 import type { DatabaseSync } from "node:sqlite";
-import {
-    Persistency,
-    TRACKER_SCHEMA,
-    Migration,
-    Commit,
-    Rollback,
-    TABLE_NAME,
-} from "./Repository.js";
+import { Persistency, TRACKER_SCHEMA, Commit, Rollback, TABLE_NAME } from "./Repository.js";
+
+import Migration from "./Migration.js";
 import ConfigReader from "./ConfigReader.js";
 
 export class SqlitePersistency implements Persistency {
@@ -16,15 +11,15 @@ export class SqlitePersistency implements Persistency {
     private readonly db: DatabaseSync;
 
     constructor() {
-        const { dbPath, migrationPath } = ConfigReader.getConfig();
+        const { sqlitePath, migrationsPath } = ConfigReader.getConfig();
 
         let path = "";
-        if (dbPath != null && typeof dbPath === "string") {
-            const hasSlash = dbPath.endsWith("/");
-            path = dbPath + (hasSlash ? "" : "/");
-        } else if (migrationPath != null && typeof migrationPath === "string") {
-            const hasSlash = migrationPath.endsWith("/");
-            path = migrationPath + (hasSlash ? "" : "/");
+        if (sqlitePath != null && typeof sqlitePath === "string") {
+            const hasSlash = sqlitePath.endsWith("/");
+            path = sqlitePath + (hasSlash ? "" : "/");
+        } else if (migrationsPath != null && typeof migrationsPath === "string") {
+            const hasSlash = migrationsPath.endsWith("/");
+            path = migrationsPath + (hasSlash ? "" : "/");
         } else path = "./migrations/";
 
         this.db = new sqlite.DatabaseSync(`${path}tracker.db`);
@@ -80,6 +75,6 @@ export class SqlitePersistency implements Persistency {
         const query = this.db.prepare(`
             SELECT * FROM ${this.MIGRATION_TABLE};
             `);
-        return query.all() as Migration[];
+        return query.all() as unknown as Migration[];
     }
 }
