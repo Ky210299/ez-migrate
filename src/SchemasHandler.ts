@@ -29,7 +29,7 @@ class SchemasHandler {
         } catch (err) {
             if (isErrnoException(err)) {
                 const { errno } = err;
-                if (errno === ERRORS) return;
+                if (errno === ERRORS.FILE_ALREADY_EXISTS.errno) return;
             }
             throw err;
         }
@@ -82,11 +82,11 @@ class SchemasHandler {
 
     makeMigrationFile(name: string) {
         if (!name) throw new Error("Name is needed for create a new migration file");
-        
+
         const now = new Date().toISOString().substring(0, 19);
         const endWithSlash = this.migrationsPath.endsWith("/");
         const path = `${this.migrationsPath}${endWithSlash ? "" : "/"}${now}-${name}.sql`;
-        
+
         if (existsSync(path)) throw new Error("The migration file already exists");
         writeFileSync(path, this.migrationSQLTemplate);
     }
@@ -97,6 +97,15 @@ class SchemasHandler {
             finalSql += this.readSQL(path) + "\n";
         }
         return finalSql;
+    }
+
+    next(lastMigrationDatetime: string) {
+        const schemasFilesName = this.getSchemasFilesName();
+        const nextSchema = schemasFilesName.find(
+            (migrationName) =>
+                migrationName.endsWith(".sql") && migrationName > lastMigrationDatetime,
+        );
+        return nextSchema != null ? `${this.DEFAULT_MIGRATION_PATH}/${nextSchema}` : null;
     }
 
     getSQLMigration() {
