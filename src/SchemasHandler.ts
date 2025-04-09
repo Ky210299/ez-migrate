@@ -1,4 +1,4 @@
-import { mkdirSync, readdirSync, readFileSync } from "node:fs";
+import { writeFileSync, mkdirSync, readdirSync, readFileSync, existsSync } from "node:fs";
 import { ERRORS, isErrnoException } from "./Errors";
 import ConfigReader from "./ConfigReader";
 
@@ -6,6 +6,17 @@ class SchemasHandler {
     private readonly upDownSeparatorRE = /^-- ez-migration-(up|down)\n/gm;
     private readonly DEFAULT_MIGRATION_PATH = "./migrations";
     private readonly migrationsPath: string;
+    private readonly migrationSQLTemplate = `
+-- ez-migration-up
+-- 👆 Write the SQL to apply the migration here
+-- ez-migration-up
+
+-- (Optional) Add comments or leave empty between up/down sections
+
+-- ez-migration-down
+-- 👇 Write the SQL to revert the migration here
+-- ez-migration-down
+    `;
     constructor() {
         const { migrationsPath } = ConfigReader.getConfig();
         this.migrationsPath = migrationsPath ?? this.DEFAULT_MIGRATION_PATH;
@@ -67,6 +78,17 @@ class SchemasHandler {
         const down = sql.slice(...downIndexs);
 
         return { up, down };
+    }
+
+    makeMigrationFile(name: string) {
+        if (!name) throw new Error("Name is needed for create a new migration file");
+        
+        const now = new Date().toISOString().substring(0, 19);
+        const endWithSlash = this.migrationsPath.endsWith("/");
+        const path = `${this.migrationsPath}${endWithSlash ? "" : "/"}${now}-${name}.sql`;
+        
+        if (existsSync(path)) throw new Error("The migration file already exists");
+        writeFileSync(path, this.migrationSQLTemplate);
     }
 
     private combineSchemas(schemasPaths: Array<string>): string {
