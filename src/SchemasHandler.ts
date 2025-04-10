@@ -99,12 +99,30 @@ class SchemasHandler {
         return finalSql;
     }
 
-    next(lastMigrationDatetime: string) {
+    next(lastMigrationFileName: string) {
         const schemasFilesName = this.getSchemasFilesName();
+        if (!schemasFilesName.includes(lastMigrationFileName))
+            throw new Error(
+                "The reference migration must be an existing migration file, in the migration folder",
+            );
         const nextSchema = schemasFilesName.find(
             (migrationName) =>
-                migrationName.endsWith(".sql") && migrationName > lastMigrationDatetime,
+                migrationName.endsWith(".sql") && migrationName > lastMigrationFileName,
         );
+        return nextSchema != null ? `${this.DEFAULT_MIGRATION_PATH}/${nextSchema}` : null;
+    }
+    before(lastMigrationFileName: string) {
+        const schemasFilesName = this.getSchemasFilesName();
+        if (!schemasFilesName.includes(lastMigrationFileName))
+            throw new Error(
+                "The reference migration must be an existing migration file, in the migration folder",
+            );
+        const nextSchema = schemasFilesName
+            .reverse()
+            .find(
+                (migrationName) =>
+                    migrationName.endsWith(".sql") && migrationName < lastMigrationFileName,
+            );
         return nextSchema != null ? `${this.DEFAULT_MIGRATION_PATH}/${nextSchema}` : null;
     }
 
