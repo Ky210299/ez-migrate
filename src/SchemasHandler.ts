@@ -57,14 +57,21 @@ class SchemasHandler {
             const { index } = match;
             info.push({ text, direction, index });
         }
-        const upInfo = info.flatMap((inf) => {
-            if (inf.direction !== "up") return [];
-            else return inf;
-        });
-        const downInfo = info.flatMap((inf) => {
-            if (inf.direction !== "down") return [];
-            else return inf;
-        });
+        const upInfo = info
+            .flatMap((inf) => {
+                if (inf.direction !== "up") return [];
+                else return inf;
+            })
+            .slice(0, 2);
+        const downInfo = info
+            .flatMap((inf) => {
+                if (inf.direction !== "down") return [];
+                else return inf;
+            })
+            .slice(0, 2);
+        if (upInfo.length + downInfo.length < 3)
+            throw new Error("Bad SQL migration format. Use the correct template");
+
         const upIndexs = upInfo.map(({ index }) => index);
         const downIndexs = downInfo.map(({ index }) => index);
 
