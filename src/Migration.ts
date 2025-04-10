@@ -1,24 +1,28 @@
 export type MigrationData = {
-    migrated_at: string;
+    migratedAt: string;
     up: string;
     down: string;
     path: string;
 };
 export default class Migration {
-    private readonly migrated_at: string;
+    private readonly migratedAt: string;
     private readonly up: string;
     private readonly down: string;
     private readonly path: string;
 
-    constructor(data: Omit<MigrationData, "migrated_at">) {
+    constructor(data: Omit<MigrationData, "migratedAt">) {
         const { up, down, path } = data;
         if (!up) throw new Error('SQL fragment for "up" the migration, is missing');
         else if (!down) throw new Error("Missing down migration");
         else if (!path) throw new Error("Migration path must be espeficied");
 
-        const now = new Date().toISOString();
-
-        this.migrated_at = now;
+        const now = new Date().toISOString().substring(0, 23);
+        const ns = process.hrtime.bigint().toString().substring(11); // three last digits
+        /**
+            Concat now with ns to avoid same timestamp when the Migrations are instanciated
+            in a forloops very fast
+        */
+        this.migratedAt = now.concat(`.${ns}`);
         this.up = up;
         this.down = down;
         this.path = path;
@@ -26,7 +30,7 @@ export default class Migration {
 
     getDetails() {
         return {
-            migrated_at: this.migrated_at,
+            migratedAt: this.migratedAt,
             up: this.up,
             down: this.down,
             path: this.path,
