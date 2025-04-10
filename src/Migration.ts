@@ -17,12 +17,11 @@ export default class Migration {
         else if (!path) throw new Error("Migration path must be espeficied");
 
         const now = new Date().toISOString().substring(0, 23);
-        const ns = process.hrtime.bigint().toString().substring(11); // three last digits
+        const ns = process.hrtime.bigint().valueOf() % BigInt(1e9); // Obtain the nanoseconds
         /**
-            Concat now with ns to avoid same timestamp when the Migrations are instanciated
-            in a forloops very fast
+            Concat now with a ns part that change in an acepted speed to avoid same timestamp when the Migrations are instanciated in for-loops very fast
         */
-        this.migratedAt = now.concat(`.${ns}`);
+        this.migratedAt = now.concat(`.${ns.toString().substring(3, 7)}`);
         this.up = up;
         this.down = down;
         this.path = path;
