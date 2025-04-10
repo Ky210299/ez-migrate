@@ -84,6 +84,9 @@ class SchemasHandler {
         const up = sql.slice(...upIndexs);
         const down = sql.slice(...downIndexs);
 
+        if (!up.trim()) throw new Error("The UP migration section is empty");
+        if (!down.trim()) throw new Error("The DOWN migration section is empty");
+
         return { up, down };
     }
 
