@@ -112,18 +112,24 @@ class SchemasHandler {
 
     next(migrationFileName: string) {
         const schemasFilesName = this.getSchemasFilesName();
-        if (!schemasFilesName.includes(migrationFileName))
+        if (!schemasFilesName.some((m) => m.startsWith(migrationFileName)))
             throw new Error(
                 "The reference migration must be an existing migration file, in the migration folder",
             );
         const nextSchema = schemasFilesName.find(
             (migrationName) => migrationName.endsWith(".sql") && migrationName > migrationFileName,
         );
-        return nextSchema != null ? `${this.DEFAULT_MIGRATION_PATH}/${nextSchema}` : null;
+        if (nextSchema == null) return null;
+
+        const path = `${this.DEFAULT_MIGRATION_PATH}/${nextSchema}`;
+        return new Migration({
+            ...this.splitUpAndDownFromSQL(this.readSQL(path)),
+            path,
+        });
     }
     before(migrationFileName: string) {
         const schemasFilesName = this.getSchemasFilesName();
-        if (!schemasFilesName.includes(migrationFileName))
+        if (!schemasFilesName.some((m) => m.startsWith(migrationFileName)))
             throw new Error(
                 "The reference migration must be an existing migration file, in the migration folder",
             );
@@ -133,24 +139,38 @@ class SchemasHandler {
                 (migrationName) =>
                     migrationName.endsWith(".sql") && migrationName < migrationFileName,
             );
-        return nextSchema != null ? `${this.DEFAULT_MIGRATION_PATH}/${nextSchema}` : null;
+        if (nextSchema == null) return null;
+
+        const path = `${this.DEFAULT_MIGRATION_PATH}/${nextSchema}`;
+        return new Migration({
+            ...this.splitUpAndDownFromSQL(this.readSQL(path)),
+            path,
+        });
     }
 
     allNextTo(migrationFileName: string) {
         const schemasFilesName = this.getSchemasFilesName();
-        if (!schemasFilesName.includes(migrationFileName))
+        if (!schemasFilesName.some((m) => m.startsWith(migrationFileName)))
             throw new Error(
                 "The reference migration must be an existing migration file, in the migration folder",
             );
         const nextSchemas = schemasFilesName.filter(
             (migrationName) => migrationName.endsWith(".sql") && migrationName > migrationFileName,
         );
-        return nextSchemas.map((schemaName) => `${this.DEFAULT_MIGRATION_PATH}/${schemaName}`);
+        return nextSchemas.flatMap((schemaName) => {
+            if (schemaName == null) return [];
+
+            const path = `${this.DEFAULT_MIGRATION_PATH}/${schemaName}`;
+            return new Migration({
+                ...this.splitUpAndDownFromSQL(this.readSQL(path)),
+                path,
+            });
+        });
     }
 
     allBeforeTo(migrationFileName: string) {
         const schemasFilesName = this.getSchemasFilesName();
-        if (!schemasFilesName.includes(migrationFileName))
+        if (!schemasFilesName.some((m) => m.startsWith(migrationFileName)))
             throw new Error(
                 "The reference migration must be an existing migration file, in the migration folder",
             );
@@ -160,7 +180,15 @@ class SchemasHandler {
                 (migrationName) =>
                     migrationName.endsWith(".sql") && migrationName < migrationFileName,
             );
-        return nextSchemas.map((schemaName) => `${this.DEFAULT_MIGRATION_PATH}/${schemaName}`);
+        return nextSchemas.flatMap((schemaName) => {
+            if (schemaName == null) return [];
+
+            const path = `${this.DEFAULT_MIGRATION_PATH}/${schemaName}`;
+            return new Migration({
+                ...this.splitUpAndDownFromSQL(this.readSQL(path)),
+                path,
+            });
+        });
     }
 
     getSQLMigration() {
