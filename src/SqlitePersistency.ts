@@ -7,7 +7,12 @@ import ConfigReader from "./ConfigReader.js";
 
 export class SqlitePersistency implements Persistency {
     private readonly MIGRATION_TABLE = TABLE_NAME;
-    private readonly MIGRATION_COLUMNS = ["migrated_at", "up", "down", "path"];
+    private readonly MIGRATION_COLUMNS = {
+        MIGRATED_AT: "migrated_at",
+        UP: "up",
+        DOWN: "down",
+        PATH: "path",
+    };
     private readonly db: DatabaseSync;
 
     constructor() {
@@ -41,19 +46,20 @@ export class SqlitePersistency implements Persistency {
     }
     async save(migrations: Array<MigrationData>): Promise<{ commit: Commit; rollback: Rollback }> {
         this.db.exec("BEGIN TRANSACTION");
+        const columns = Object.values(this.MIGRATION_COLUMNS);
 
         const placeholders = new Array(migrations.length)
-            .fill("(" + new Array(this.MIGRATION_COLUMNS.length).fill("?").join(",") + ")")
+            .fill("(" + new Array(columns.length).fill("?").join(",") + ")")
             .join(",");
 
         const insert = this.db.prepare(`
-            INSERT INTO ${this.MIGRATION_TABLE} (${this.MIGRATION_COLUMNS.join(",")})
+            INSERT INTO ${this.MIGRATION_TABLE} (${columns.join(",")})
             VALUES ${placeholders}
             `);
 
         const values = migrations.flatMap((m) => Object.values(m));
 
-        if (values.length !== migrations.length * this.MIGRATION_COLUMNS.length) {
+        if (values.length !== migrations.length * columns.length) {
             throw new Error("Mismatch in values and placeholders count");
         }
 
