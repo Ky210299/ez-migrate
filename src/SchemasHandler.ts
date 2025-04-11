@@ -1,6 +1,7 @@
 import { writeFileSync, mkdirSync, readdirSync, readFileSync, existsSync } from "node:fs";
 import { ERRORS, isErrnoException } from "./Errors";
 import ConfigReader from "./ConfigReader";
+import Migration from "./Migration";
 
 class SchemasHandler {
     private readonly upDownSeparatorRE = /^-- ez-migration-(up|down)\n/gm;
@@ -93,7 +94,7 @@ class SchemasHandler {
     makeMigrationFile(name: string) {
         if (!name) throw new Error("Name is needed for create a new migration file");
 
-        const now = new Date().toISOString().substring(0, 19);
+        const now = Migration.getPreciseNow();
         const endWithSlash = this.migrationsPath.endsWith("/");
         const path = `${this.migrationsPath}${endWithSlash ? "" : "/"}${now}-${name}.sql`;
 
