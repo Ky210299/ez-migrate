@@ -45,8 +45,8 @@ class SchemasHandler {
         return schemasFilesNames.map((name) => this.migrationsPath + "/" + name);
     }
 
-    private readSQL(sqlPath: string) {
-        return readFileSync(sqlPath);
+    readSQL(sqlPath: string) {
+        return readFileSync(sqlPath, "utf8");
     }
 
     private splitUpAndDownFromSQL(sql: string) {
