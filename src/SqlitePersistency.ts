@@ -83,4 +83,12 @@ export class SqlitePersistency implements Persistency {
             `);
         return query.all() as unknown as Migration[];
     }
+
+    async getLastMigrationDone() {
+        const query = this.db.prepare(`
+                SELECT * FROM ${TABLE_NAME} 
+                ORDER BY ${this.MIGRATION_COLUMNS.MIGRATED_AT} DESC LIMIT 1
+            `);
+        return query.get() as MigrationData;
+    }
 }
