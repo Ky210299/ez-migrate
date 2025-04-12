@@ -2,7 +2,7 @@ export interface Connection {
     isConnected: () => Promise<boolean>;
     runSQL: (sql: string) => Promise<any>;
 }
-type MySQLConnection = Connection & {
+export interface MySQLConnection  extends Connection{
     SGDBName: string;
     host: string;
     user: string;

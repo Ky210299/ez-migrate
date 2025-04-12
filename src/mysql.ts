@@ -1,15 +1,28 @@
 import { createPool } from "mysql2/promise";
 import type { PoolOptions, Pool } from "mysql2/promise";
-import { Connection } from "./DatabaseConnector.js";
+import { MySQLConnection } from "./DatabaseConnector.js";
 
-export default class MysqlConnection implements Connection {
+export default class MysqlConnection implements MySQLConnection {
     private readonly pool: Pool;
-    constructor({ user, password, port, database }: PoolOptions) {
+    readonly SGDBName: string = "mysql";
+    readonly host: string;
+    readonly user: string;
+    readonly password: string | undefined;
+    readonly database: string | undefined;
+    readonly port: string | number;
+    constructor({ user, password, port, database, host }: PoolOptions) {
+        this.host = host ?? "localhost";
+        this.user = user ?? "root";
+        this.password = password ?? "";
+        this.port = port ?? 3306;
+        this.database = database ?? "";
+        
         this.pool = createPool({
-            user: user ?? "root",
-            password: password ?? "",
-            port: port ?? 3306,
-            database,
+            host: this.host,
+            user: this.user,
+            password: this.password,
+            port: this.port,
+            database: this.database,
             multipleStatements: true,
             connectionLimit: 1,
         });
