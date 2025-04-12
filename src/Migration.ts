@@ -1,3 +1,5 @@
+import { MigrateError } from "./Errors";
+
 export type MigrationData = {
     migratedAt: string;
     up: string;
@@ -11,7 +13,7 @@ export default class Migration {
     private readonly path: string;
 
     /**
-     *  Concat now with a ns part that change in an acepted speed to avoid same timestamp when the
+     *  Concat ns part that change in an accepted speed to avoid same timestamp when the
      *  Migrations are instanciated in for-loops very fast
      */
     static getPreciseNow() {
@@ -21,6 +23,7 @@ export default class Migration {
     }
 
     constructor(data: Omit<MigrationData, "migratedAt">) {
+        if (data == null) throw new MigrateError("Invalid migration data")
         const { up, down, path } = data;
         if (!up) throw new Error('SQL fragment for "up" the migration, is missing');
         else if (!down) throw new Error("Missing down migration");
