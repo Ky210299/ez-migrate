@@ -6,7 +6,7 @@ import type { DatabaseSync } from "node:sqlite";
 
 type SqlitePersistencyArguments = { sqlitePath: string, migrationsPath: string };
 
-export class SqlitePersistency implements Persistency {
+export default class SqlitePersistency implements Persistency {
     private readonly MIGRATION_TABLE = TABLE_NAME;
     private readonly MIGRATION_COLUMNS = {
         MIGRATED_AT: "migrated_at",
