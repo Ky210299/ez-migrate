@@ -45,7 +45,7 @@ export default class MysqlConnection implements MySQLConnection {
         try {
             connection = await this.pool.getConnection();
             connection.beginTransaction();
-            const result = connection.execute(sql, values ?? undefined);
+            const result = connection.query(sql, values ?? undefined);
             connection.commit();
             return result;
         } catch (err) {
