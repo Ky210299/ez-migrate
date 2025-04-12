@@ -2,13 +2,13 @@ import { CONFIG_PATH, DEFAULT_CONFIG } from "./constants"
 import { existsSync, writeFileSync } from "node:fs"
 import { MigrateError } from "./Errors";
 export default class ConfigManager {
-    constructor() { }
+    private constructor() { throw "ConfigManager is a Static class" }
     
-    public existsConfig(path: string = CONFIG_PATH) {
+    static existsConfig(path: string = CONFIG_PATH) {
         return existsSync(path ?? CONFIG_PATH);
     }
     
-    public initConfig(path: string = CONFIG_PATH) {
+    static initConfig(path: string = CONFIG_PATH) {
         if (this.existsConfig(path)) {
             throw new MigrateError("Config Already exists");
         }
