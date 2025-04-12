@@ -1,12 +1,41 @@
 import ConfigReader from "../ConfigReader";
+import MigrationExecutor from "../MigrationExecutor";
+import SchemasHandler from "../SchemasHandler";
+import ConnectionFactory from "../ConnectionFactory";
+import TrackerFactory from "../TrackerFactory";
 import Repository from "../Repository";
-import { SqlitePersistency } from "../SqlitePersistency";
+import { Config } from "../types";
 
 export default class Up {
+    private static async getNextMigration(config: Config, tracker: Repository) {
+        const { migrationsPath } = config;
+        const schemaHandler = new SchemasHandler({ migrationsPath });
+        
+        const lastMigration = await tracker.getLastMigrationDone();
+        if (lastMigration == null) {
+            const firstMigrationFile = schemaHandler.getAllMigrations().at(0);
+            
+            if (firstMigrationFile == null) 
+                throw new Error("There is not next migration available");
+            else
+                return schemaHandler.makeMigrationFromFile(firstMigrationFile);
+        }
+        const lastMigrationPath = lastMigration.getDetails().path;
+        return schemaHandler.next(lastMigrationPath);
+    }
+    
     public static async run() {
         const configReader = new ConfigReader();
-        const { sqlitePath, migrationsPath } = configReader.getConfig();
-        const repository = new Repository(new SqlitePersistency({ sqlitePath, migrationsPath }));
-        const lastMigration = await repository.getLastMigrationDone();
+        const config = configReader.getConfig();
+        
+        const tracker = TrackerFactory.create(config);
+        const nextMigration = await this.getNextMigration(config, tracker);
+        if (!nextMigration) throw new Error("There is not a next migration available");
+        
+        const connection = ConnectionFactory.create(config);
+        const migrationExecutor = new MigrationExecutor(connection);
+        
+        const sql = nextMigration.getDetails().up;
+        await migrationExecutor.execute(sql);
     }
 }
