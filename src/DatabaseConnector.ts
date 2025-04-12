@@ -15,9 +15,7 @@ type DatabaseConnection = MySQLConnection;
 class DatabaseConnector {
     readonly connection: DatabaseConnection;
     constructor(connection: DatabaseConnection) {
-        this.connection = {
-            ...connection,
-        };
+        this.connection = connection
     }
     async runSQL(sql: string): Promise<void> {
         try {
