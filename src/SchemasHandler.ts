@@ -120,7 +120,7 @@ export default class SchemasHandler {
         );
         if (nextSchema == null) return null;
 
-        const path = `${DEFAULT_MIGRATION_PATH}/${nextSchema}`;
+        const path = `${this.migrationsPath}/${nextSchema}`;
         return new Migration({
             ...this.splitUpAndDownFromSQL(this.readSQL(path)),
             path,
@@ -140,7 +140,7 @@ export default class SchemasHandler {
             );
         if (nextSchema == null) return null;
 
-        const path = `${DEFAULT_MIGRATION_PATH}/${nextSchema}`;
+        const path = `${this.migrationsPath}/${nextSchema}`;
         return new Migration({
             ...this.splitUpAndDownFromSQL(this.readSQL(path)),
             path,
@@ -159,7 +159,7 @@ export default class SchemasHandler {
         return nextSchemas.flatMap((schemaName) => {
             if (schemaName == null) return [];
 
-            const path = `${DEFAULT_MIGRATION_PATH}/${schemaName}`;
+            const path = `${this.migrationsPath}/${schemaName}`;
             return new Migration({
                 ...this.splitUpAndDownFromSQL(this.readSQL(path)),
                 path,
@@ -182,7 +182,7 @@ export default class SchemasHandler {
         return nextSchemas.flatMap((schemaName) => {
             if (schemaName == null) return [];
 
-            const path = `${DEFAULT_MIGRATION_PATH}/${schemaName}`;
+            const path = `${this.migrationsPath}/${schemaName}`;
             return new Migration({
                 ...this.splitUpAndDownFromSQL(this.readSQL(path)),
                 path,
@@ -194,5 +194,19 @@ export default class SchemasHandler {
         const schemasFilesNames = this.getSchemasFilesName();
         const schemasPaths = this.addMigrationPathToSchemasName(schemasFilesNames);
         return this.combineSchemas(schemasPaths);
+    }
+    
+    getAllMigrations() {
+        const schemasFilesNames = this.getSchemasFilesName();
+        return this.addMigrationPathToSchemasName(schemasFilesNames).sort();
+    }
+    
+    makeMigrationFromFile(filePath: string) {
+        const sql = this.readSQL(filePath)
+        if (!sql) throw new Error("Migration file is empty or doesn't exists");
+        return new Migration({
+            ...this.splitUpAndDownFromSQL(sql),
+            path: filePath,
+        });
     }
 }
