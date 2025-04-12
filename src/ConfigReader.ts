@@ -14,7 +14,7 @@ class ConfigReader {
 
     private readConfig() {
         try {
-            const json = readFileSync(CONFIG_PATH).toString();
+            const json = readFileSync(CONFIG_PATH, "utf-8");
             if (!json) throw new Error("Configuration file not found");
             return JSON.parse(json);
         } catch (err) {
