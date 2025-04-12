@@ -1,16 +1,20 @@
 export interface Connection {
+    SGDBName: string;
     isConnected: () => Promise<boolean>;
     runSQL: (sql: string) => Promise<any>;
 }
-export interface MySQLConnection  extends Connection{
-    SGDBName: string;
+
+export interface MySQLConnection extends Connection {
     host: string;
     user: string;
     password: string | undefined;
     database: string | undefined;
     port: string | number;
 };
-type DatabaseConnection = MySQLConnection;
+export interface SqliteConnection extends Connection {
+    path: string
+}
+type DatabaseConnection = MySQLConnection | SqliteConnection;
 
 class DatabaseConnector {
     readonly connection: DatabaseConnection;
