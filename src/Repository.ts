@@ -25,6 +25,7 @@ export interface Persistency {
      */
     save: (migration: Array<MigrationData>) => Promise<{ commit: Commit; rollback: Rollback }>;
     list: () => Promise<Array<Migration>>;
+    getLastMigrationDone: () => Promise<Migration>;
 }
 
 export default class Repository {
@@ -42,5 +43,8 @@ export default class Repository {
     }
     async listMigrations() {
         return await this.persistency.list();
+    }
+    async getLastMigrationDone(): Promise<Migration> {
+        return await this.getLastMigrationDone()
     }
 }
