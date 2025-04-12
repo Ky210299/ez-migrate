@@ -1,11 +1,14 @@
 import { readFileSync } from "node:fs";
 import { isErrnoException, throwMessage } from "./Errors";
-import { CONFIG_PATH, MIGRATIONS_DILALECTS } from "./constants";
+import { CONFIG_PATH, DEFAULT_CONFIG, MIGRATIONS_DILALECTS } from "./constants";
 
 class ConfigReader {
-    private config: Record<string, any>;
+    private config: Record<string, any> = DEFAULT_CONFIG;
     constructor() {
-        this.config = this.readConfig();
+        this.config = {
+            ...this.config,
+            ...this.readConfig()
+        }
         this.validateConfig();
     }
 
