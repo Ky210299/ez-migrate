@@ -87,7 +87,7 @@ export default class SchemasHandler {
         if (!up.trim()) throw new Error("The UP migration section is empty");
         if (!down.trim()) throw new Error("The DOWN migration section is empty");
 
-        return { up, down };
+        return { up: up.replace(/\n/g, ""), down: down.replace(/\n/g, "") };
     }
 
     makeMigrationFile(name: string) {
