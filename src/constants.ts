@@ -21,5 +21,8 @@ export const DEFAULT_CONFIG: Config = {
         port: "DB_PORT",
         host: "DB_HOST",
         database: "DB_NAME"
+    },
+    sqlite: {
+        trackerPath: DEFAULT_MIGRATION_PATH,
     }
 }
