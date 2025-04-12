@@ -59,8 +59,14 @@ export default class SqlitePersistency implements Persistency {
 
         // Returns commit or rollback function that will be used
         // when the migration is done successfuly (commit) or not (rollback)
-        const commit = async () => this.db.exec("COMMIT");
-        const rollback = async () => this.db.exec("ROLLBACK");
+        const commit = async () => {
+            this.db.exec("COMMIT")
+            console.log("Commit tracker successfuly")
+        };
+        const rollback = async () => {
+            this.db.exec("ROLLBACK");
+            console.warn("Rollback successfuly")
+        }
 
         try {
             insert.run(...values);
