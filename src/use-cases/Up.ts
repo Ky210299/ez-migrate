@@ -17,11 +17,12 @@ export default class Up {
             
             if (firstMigrationFile == null) 
                 throw new Error("There is not next migration available");
-            else
-                return schemaHandler.makeMigrationFromFile(firstMigrationFile);
+                
+            return schemaHandler.makeMigrationFromFile(firstMigrationFile);
         }
         const lastMigrationPath = lastMigration.getDetails().path;
-        return schemaHandler.next(lastMigrationPath);
+        const cleanName = lastMigrationPath.substring(lastMigrationPath.lastIndexOf("/") + 1)
+        return schemaHandler.next(cleanName);
     }
     
     public static async run() {
