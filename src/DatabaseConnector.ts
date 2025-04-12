@@ -22,12 +22,8 @@ class DatabaseConnector {
         this.connection = connection
     }
     async runSQL(sql: string): Promise<void> {
-        try {
             await this.connection.runSQL(sql);
             console.log("SQL runned successfuly!\n");
-        } catch (err) {
-            console.error("Error running SQL:\n", err);
-        }
     }
 
     async testConnection() {
