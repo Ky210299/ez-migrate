@@ -44,9 +44,9 @@ export default class MysqlConnection implements MySQLConnection {
         let connection;
         try {
             connection = await this.pool.getConnection();
-            connection.beginTransaction();
-            const result = connection.query(sql, values ?? undefined);
-            connection.commit();
+            await connection.beginTransaction();
+            const result = await connection.query(sql, values ?? undefined);
+            await connection.commit();
             return result;
         } catch (err) {
             console.error("MySQL error doing migration:\n", err);
