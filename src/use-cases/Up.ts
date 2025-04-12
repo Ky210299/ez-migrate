@@ -34,9 +34,8 @@ export default class Up {
         if (!nextMigration) throw new Error("There is not a next migration available");
         
         const connection = ConnectionFactory.create(config);
-        const migrationExecutor = new MigrationExecutor(connection);
+        const migrationExecutor = new MigrationExecutor(connection, tracker);
         
-        const sql = nextMigration.getDetails().up;
-        await migrationExecutor.execute(sql);
+        await migrationExecutor.executeSingleMigrationUp(nextMigration);
     }
 }
