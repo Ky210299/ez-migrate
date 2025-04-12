@@ -51,6 +51,7 @@ export default class MysqlConnection implements MySQLConnection {
         } catch (err) {
             console.error("MySQL error doing migration:\n", err);
             await connection?.rollback();
+            throw err
         } finally {
             connection?.release();
         }
