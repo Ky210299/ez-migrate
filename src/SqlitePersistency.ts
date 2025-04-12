@@ -72,8 +72,7 @@ export default class SqlitePersistency implements Persistency {
             insert.run(...values);
         } catch (err) {
             console.error(err);
-            rollback();
-            process.exit("Error saving the migration");
+            await rollback();
         }
         return { commit, rollback };
     }
