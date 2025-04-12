@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { isErrnoException, throwMessage } from "./Errors";
 import { CONFIG_PATH, DEFAULT_CONFIG, MIGRATIONS_DILALECTS } from "./constants";
 
-class ConfigReader {
+export default class ConfigReader {
     private config: Record<string, any> = DEFAULT_CONFIG;
     constructor() {
         this.config = {
@@ -35,5 +35,3 @@ class ConfigReader {
         return this.config;
     }
 }
-
-export default new ConfigReader();

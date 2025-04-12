@@ -3,7 +3,10 @@ import type { DatabaseSync } from "node:sqlite";
 import { Persistency, TRACKER_SCHEMA, Commit, Rollback, TABLE_NAME } from "./Repository.js";
 
 import Migration, { MigrationData } from "./Migration.js";
-import ConfigReader from "./ConfigReader.js";
+
+import type { DatabaseSync } from "node:sqlite";
+
+type SqlitePersistencyArguments = { sqlitePath: string, migrationsPath: string };
 
 export class SqlitePersistency implements Persistency {
     private readonly MIGRATION_TABLE = TABLE_NAME;
@@ -15,9 +18,7 @@ export class SqlitePersistency implements Persistency {
     };
     private readonly db: DatabaseSync;
 
-    constructor() {
-        const { sqlitePath, migrationsPath } = ConfigReader.getConfig();
-
+    constructor({ sqlitePath, migrationsPath }: SqlitePersistencyArguments) {
         let path = "";
         if (sqlitePath != null && typeof sqlitePath === "string") {
             const hasSlash = sqlitePath.endsWith("/");

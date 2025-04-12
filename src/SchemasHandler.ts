@@ -1,10 +1,10 @@
 import { writeFileSync, mkdirSync, readdirSync, readFileSync, existsSync } from "node:fs";
 import { ERRORS, isErrnoException } from "./Errors";
 import { DEFAULT_MIGRATION_PATH } from "./constants";
-import ConfigReader from "./ConfigReader";
 import Migration from "./Migration";
 
-class SchemasHandler {
+type SchemaHandlerArguments = { migrationsPath: string };
+export default class SchemasHandler {
     private readonly upDownSeparatorRE = /^-- ez-migration-(up|down)\n/gm;
     private readonly migrationsPath: string;
     private readonly migrationSQLTemplate = `
@@ -18,8 +18,7 @@ class SchemasHandler {
 -- 👇 Write the SQL to revert the migration here
 -- ez-migration-down
     `;
-    constructor() {
-        const { migrationsPath } = ConfigReader.getConfig();
+    constructor({ migrationsPath }: SchemaHandlerArguments) {
         this.migrationsPath = migrationsPath ?? DEFAULT_MIGRATION_PATH;
     }
 
@@ -197,5 +196,3 @@ class SchemasHandler {
         return this.combineSchemas(schemasPaths);
     }
 }
-
-export default new SchemasHandler();
