@@ -1,11 +1,11 @@
 import { readFileSync } from "node:fs";
 import { isErrnoException, throwMessage } from "./Errors";
+import { CONFIG_PATH } from "./constants";
 const Dialects = {
     MYSQL: "mysql",
 } as const;
 
 class ConfigReader {
-    static readonly configPath = "./ez-migrate.json";
     private config: Record<string, any>;
     constructor() {
         this.config = this.readConfig();
@@ -14,7 +14,7 @@ class ConfigReader {
 
     private readConfig() {
         try {
-            const json = readFileSync(ConfigReader.configPath).toString();
+            const json = readFileSync(CONFIG_PATH).toString();
             if (!json) throw new Error("Configuration file not found");
             return JSON.parse(json);
         } catch (err) {
