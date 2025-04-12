@@ -1,7 +1,5 @@
 import sqlite from "node:sqlite";
-import type { DatabaseSync } from "node:sqlite";
 import { Persistency, TRACKER_SCHEMA, Commit, Rollback, TABLE_NAME } from "./Repository.js";
-
 import Migration, { MigrationData } from "./Migration.js";
 
 import type { DatabaseSync } from "node:sqlite";
@@ -90,6 +88,6 @@ export class SqlitePersistency implements Persistency {
                 SELECT * FROM ${TABLE_NAME} 
                 ORDER BY ${this.MIGRATION_COLUMNS.MIGRATED_AT} DESC LIMIT 1
             `);
-        return query.get() as MigrationData;
+        return new Migration(query.get() as MigrationData);
     }
 }
