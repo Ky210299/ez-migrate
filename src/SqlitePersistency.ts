@@ -4,7 +4,7 @@ import Migration, { MigrationData } from "./Migration.js";
 
 import type { DatabaseSync } from "node:sqlite";
 
-type SqlitePersistencyArguments = { sqlitePath: string, migrationsPath: string };
+type SqlitePersistencyArguments = { trackerPath: string };
 
 export default class SqlitePersistency implements Persistency {
     private readonly MIGRATION_TABLE = TABLE_NAME;
@@ -15,19 +15,8 @@ export default class SqlitePersistency implements Persistency {
         PATH: "path",
     };
     private readonly db: DatabaseSync;
-
-    constructor({ sqlitePath, migrationsPath }: SqlitePersistencyArguments) {
-        let path = "";
-        if (sqlitePath != null && typeof sqlitePath === "string") {
-            const hasSlash = sqlitePath.endsWith("/");
-            path = sqlitePath + (hasSlash ? "" : "/");
-        } else if (migrationsPath != null && typeof migrationsPath === "string") {
-            const hasSlash = migrationsPath.endsWith("/");
-            path = migrationsPath + (hasSlash ? "" : "/");
-        } else path = "./migrations/";
-
-        this.db = new sqlite.DatabaseSync(`${path}tracker.db`);
-
+    
+    private checkSchema() {
         const query = this.db.prepare(`
             SELECT * FROM sqlite_schema
             WHERE 
@@ -43,7 +32,13 @@ export default class SqlitePersistency implements Persistency {
             );
         }
     }
-    async save(migrations: Array<MigrationData>): Promise<{ commit: Commit; rollback: Rollback }> {
+
+    constructor({ trackerPath }: SqlitePersistencyArguments) {
+        const path = `${trackerPath}${trackerPath.endsWith("/") ? "" : "/"}tracker.db`
+        this.db = new sqlite.DatabaseSync(path);
+        this.checkSchema()
+    }
+    async save(migrations: Array<MigrationData>) {
         this.db.exec("BEGIN TRANSACTION");
         const columns = Object.values(this.MIGRATION_COLUMNS);
 
@@ -76,7 +71,7 @@ export default class SqlitePersistency implements Persistency {
         }
         return { commit, rollback };
     }
-    async list(): Promise<Array<Migration>> {
+    async list() {
         const query = this.db.prepare(`
             SELECT * FROM ${this.MIGRATION_TABLE};
             `);
@@ -88,6 +83,7 @@ export default class SqlitePersistency implements Persistency {
                 SELECT * FROM ${TABLE_NAME} 
                 ORDER BY ${this.MIGRATION_COLUMNS.MIGRATED_AT} DESC LIMIT 1
             `);
-        return new Migration(query.get() as MigrationData);
+        const migrationData = query.get() as MigrationData
+        return migrationData != null ? new Migration(migrationData) : null;
     }
 }
