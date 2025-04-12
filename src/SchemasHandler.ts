@@ -1,11 +1,11 @@
 import { writeFileSync, mkdirSync, readdirSync, readFileSync, existsSync } from "node:fs";
 import { ERRORS, isErrnoException } from "./Errors";
+import { DEFAULT_MIGRATION_PATH } from "./constants";
 import ConfigReader from "./ConfigReader";
 import Migration from "./Migration";
 
 class SchemasHandler {
     private readonly upDownSeparatorRE = /^-- ez-migration-(up|down)\n/gm;
-    private readonly DEFAULT_MIGRATION_PATH = "./migrations";
     private readonly migrationsPath: string;
     private readonly migrationSQLTemplate = `
 -- ez-migration-up
@@ -20,7 +20,7 @@ class SchemasHandler {
     `;
     constructor() {
         const { migrationsPath } = ConfigReader.getConfig();
-        this.migrationsPath = migrationsPath ?? this.DEFAULT_MIGRATION_PATH;
+        this.migrationsPath = migrationsPath ?? DEFAULT_MIGRATION_PATH;
     }
 
     private ensureMigrationPathExists() {
@@ -121,7 +121,7 @@ class SchemasHandler {
         );
         if (nextSchema == null) return null;
 
-        const path = `${this.DEFAULT_MIGRATION_PATH}/${nextSchema}`;
+        const path = `${DEFAULT_MIGRATION_PATH}/${nextSchema}`;
         return new Migration({
             ...this.splitUpAndDownFromSQL(this.readSQL(path)),
             path,
@@ -141,7 +141,7 @@ class SchemasHandler {
             );
         if (nextSchema == null) return null;
 
-        const path = `${this.DEFAULT_MIGRATION_PATH}/${nextSchema}`;
+        const path = `${DEFAULT_MIGRATION_PATH}/${nextSchema}`;
         return new Migration({
             ...this.splitUpAndDownFromSQL(this.readSQL(path)),
             path,
@@ -160,7 +160,7 @@ class SchemasHandler {
         return nextSchemas.flatMap((schemaName) => {
             if (schemaName == null) return [];
 
-            const path = `${this.DEFAULT_MIGRATION_PATH}/${schemaName}`;
+            const path = `${DEFAULT_MIGRATION_PATH}/${schemaName}`;
             return new Migration({
                 ...this.splitUpAndDownFromSQL(this.readSQL(path)),
                 path,
@@ -183,7 +183,7 @@ class SchemasHandler {
         return nextSchemas.flatMap((schemaName) => {
             if (schemaName == null) return [];
 
-            const path = `${this.DEFAULT_MIGRATION_PATH}/${schemaName}`;
+            const path = `${DEFAULT_MIGRATION_PATH}/${schemaName}`;
             return new Migration({
                 ...this.splitUpAndDownFromSQL(this.readSQL(path)),
                 path,
