@@ -12,5 +12,12 @@ export const TRACKER_DIALECTS = {
 export const DEFAULT_CONFIG = {
     dialect: MIGRATIONS_DILALECTS.MYSQL,
     trackerDialect: TRACKER_DIALECTS.sqlite,
-    migrationsPath: DEFAULT_MIGRATION_PATH
+    migrationsPath: DEFAULT_MIGRATION_PATH,
+    envKeys: {
+        user: "DB_USER",
+        password: "DB_PASSWORD",
+        port: "DB_PORT",
+        host: "DB_HOST",
+        database: "DB_NAME"
+    }
 }
