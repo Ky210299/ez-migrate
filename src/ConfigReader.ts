@@ -1,9 +1,6 @@
 import { readFileSync } from "node:fs";
 import { isErrnoException, throwMessage } from "./Errors";
-import { CONFIG_PATH } from "./constants";
-const Dialects = {
-    MYSQL: "mysql",
-} as const;
+import { CONFIG_PATH, MIGRATIONS_DILALECTS } from "./constants";
 
 class ConfigReader {
     private config: Record<string, any>;
@@ -27,7 +24,7 @@ class ConfigReader {
 
     private validateConfig() {
         if (typeof this.config !== "object") throw new Error("Invalid configuration file.");
-        else if (Object.values(Dialects).includes(this.config.dialect) === false)
+        else if (Object.values(MIGRATIONS_DILALECTS).includes(this.config.dialect) === false)
             throw new Error("Invalid dialect");
     }
 
