@@ -1,12 +1,14 @@
 import sqlite from "node:sqlite";
 import type { DatabaseSync } from "node:sqlite";
-import { Connection } from "./DatabaseConnector";
 
-export default class SqliteConnection implements Connection {
+export default class SqliteConnection implements SqliteConnection {
     private readonly db: DatabaseSync;
+    readonly SGDBName: string = "sqlite";
+    readonly path: string
 
-    constructor() {
-        this.db = new sqlite.DatabaseSync("testDB.db");
+    constructor(path: string) {
+        this.path = path;
+        this.db = new sqlite.DatabaseSync(this.path);
     }
 
     async isConnected(): Promise<boolean> {
