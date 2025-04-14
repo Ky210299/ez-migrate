@@ -15,17 +15,36 @@ export default class MysqlConnection implements MySQLConnection {
         this.user = user ?? "root";
         this.password = password ?? "";
         this.port = port ?? 3306;
-        this.database = database ?? "";
+        this.database = database;
         
         this.pool = createPool({
             host: this.host,
             user: this.user,
             password: this.password,
             port: this.port,
-            database: this.database,
             multipleStatements: true,
             connectionLimit: 1,
         });
+    }
+    async init() {
+        try {
+            await this.existsDatabase(this.pool, this.database ?? null)
+            console.log(`Using ${this.database} as database target for migration`)
+        } catch (err) {
+            console.warn("Not existing database.\nRunning migration whihout use any dabase")
+        }
+    }
+    async existsDatabase(pool: Pool, database: string | null) {
+        const connection = await pool.getConnection();
+        console.log("Trying to use ", database);
+        try {
+            await connection.query(`USE ${database}`);
+            return database
+        } catch (err) {
+            throw err
+        } finally {
+            connection.release();
+        }
     }
     async isConnected(): Promise<boolean> {
         let connection;

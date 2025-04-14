@@ -12,6 +12,7 @@ class MigrationExecutor {
     
     async executeSingleMigrationUp(migration: Migration){
         await this.dbconnector.testConnection();
+        await this.dbconnector.initConnection();
         const migrationData = migration.getDetails()
         const { commit, rollback } = await this.tracker.save([migrationData]);
         try {

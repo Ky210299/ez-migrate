@@ -10,6 +10,10 @@ export default class SqliteConnection implements SqliteConnection {
         this.path = path;
         this.db = new sqlite.DatabaseSync(this.path);
     }
+    
+    async init() {
+        return;
+    }
 
     async isConnected(): Promise<boolean> {
         try {

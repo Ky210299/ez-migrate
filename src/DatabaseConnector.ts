@@ -2,6 +2,7 @@ export interface Connection {
     SGDBName: string;
     isConnected: () => Promise<boolean>;
     runSQL: (sql: string) => Promise<any>;
+    init: () => Promise<void>;
 }
 
 export interface MySQLConnection extends Connection {
@@ -24,6 +25,10 @@ class DatabaseConnector {
     async runSQL(sql: string): Promise<void> {
             await this.connection.runSQL(sql);
             console.log("SQL runned successfuly!\n");
+    }
+    
+    async initConnection() {
+        await this.connection.init();
     }
 
     async testConnection() {
