@@ -10,7 +10,7 @@ class MigrationExecutor {
         this.tracker = tracker;
     }
     
-    async executeSingleMigrationUp(migration: Migration){
+    async executeSingleMigrationUp(migration: Migration) {
         await this.dbconnector.testConnection();
         await this.dbconnector.initConnection();
         const migrationData = migration.getDetails()
@@ -18,20 +18,20 @@ class MigrationExecutor {
         try {
             await this.dbconnector.runSQL(migrationData.up);
             await commit()
-        } catch(err){
-           await rollback()
-           throw err;
+        } catch (err) {
+            await rollback()
+            throw err;
         }
     }
-    async executeSingleMigrationDown(migration: Migration){
+    async executeSingleMigrationDown(migration: Migration) {
         await this.dbconnector.testConnection();
         const migrationData = migration.getDetails()
         const { commit, rollback } = await this.tracker.save([migrationData]);
         try {
             await this.dbconnector.runSQL(migrationData.down);
             await commit()
-        } catch(err){
-           await rollback()
+        } catch (err) {
+            await rollback()
         }
     };
     async executeMigrationsUp(migrations: Array<Migration>) {
@@ -41,8 +41,8 @@ class MigrationExecutor {
         try {
             await this.dbconnector.runSQL(migrationsData.map(m => m.up).join(""));
             await commit()
-        } catch(err){
-           await rollback()
+        } catch (err) {
+            await rollback()
         }
     }
     async executeMigrationsDown(migrations: Array<Migration>) {

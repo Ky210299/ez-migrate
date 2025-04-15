@@ -23,8 +23,8 @@ class DatabaseConnector {
         this.connection = connection
     }
     async runSQL(sql: string): Promise<void> {
-            await this.connection.runSQL(sql);
-            console.log("SQL runned successfuly!\n");
+        await this.connection.runSQL(sql);
+        console.log("SQL runned successfuly!\n");
     }
     
     async initConnection() {
