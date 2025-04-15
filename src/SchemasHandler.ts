@@ -9,15 +9,13 @@ export default class SchemasHandler {
     private readonly migrationsPath: string;
     private readonly migrationSQLTemplate = `
 -- ez-migration-up
--- 👆 Write the SQL to apply the migration here
+    -- Write the SQL to apply the migration here
 -- ez-migration-up
-
--- (Optional) Add comments or leave empty between up/down sections
-
+    -- (Optional) Add comments or leave empty between up/down sections
 -- ez-migration-down
--- 👇 Write the SQL to revert the migration here
+    -- Write the SQL to revert the migration here
 -- ez-migration-down
-    `;
+`.trim();
     constructor({ migrationsPath }: SchemaHandlerArguments) {
         this.migrationsPath = migrationsPath ?? DEFAULT_MIGRATION_PATH;
     }
