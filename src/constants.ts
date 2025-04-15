@@ -5,6 +5,7 @@ export const DEFAULT_MIGRATION_PATH = "./migrations";
 
 export const MIGRATIONS_DILALECTS = {
     MYSQL: "mysql",
+    sqlite: "sqlite",
 } as const;
 
 export const TRACKER_DIALECTS = {

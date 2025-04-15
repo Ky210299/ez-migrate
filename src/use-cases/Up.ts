@@ -6,7 +6,11 @@ import TrackerFactory from "../TrackerFactory";
 import Repository from "../Repository";
 import { Config } from "../types";
 
+/** Class for running the Up use case */
 export default class Up {
+    /** returns the next Migration available next to the last done. If not last migration done,
+     * use the first migration file, throw otherwise.
+    */
     private static async getNextMigration(config: Config, tracker: Repository) {
         const { migrationsPath } = config;
         const schemaHandler = new SchemasHandler({ migrationsPath });
@@ -25,6 +29,7 @@ export default class Up {
         return schemaHandler.next(cleanName);
     }
     
+    /** Execute the next available migration */
     public static async run() {
         const configReader = new ConfigReader();
         const config = configReader.getConfig();

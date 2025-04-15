@@ -3,7 +3,7 @@ import type { DatabaseSync } from "node:sqlite";
 
 export default class SqliteConnection implements SqliteConnection {
     private readonly db: DatabaseSync;
-    readonly SGDBName: string = "sqlite";
+    readonly DBMSName: string = "sqlite";
     readonly path: string
 
     constructor(path: string) {

@@ -13,21 +13,24 @@ export const TRACKER_SCHEMA = `
         PRIMARY KEY (migrated_at)
     )
     `.trim();
+/** Commit is a async function that does a commit to a started transaction */
 export type Commit = () => Promise<void>;
+/** Rollback is a async function that does a rollback to a started transaction */
 export type Rollback = () => Promise<void>;
-/*
- */
 
 export interface Persistency {
-    /**
+    /** 
      *  Save begins a transaction and returns the commit and rollback functions that
-     * are called if the migrations is done successfuly (commit) or  fails (rollback)
+     *  are called if the migrations is done successfuly (commit) or  fails (rollback)
      */
     save: (migration: Array<MigrationData>) => Promise<{ commit: Commit; rollback: Rollback }>;
+    /** List all migrations successfuly done */
     list: () => Promise<Array<Migration>>;
+    /** Return the last migration done if exists, null otherwise */
     getLastMigrationDone: () => Promise<Migration | null>;
 }
 
+/** Repository for the migration tracker persistency */
 export default class Repository {
     private readonly persistency: Persistency;
     constructor(persistency: Persistency) {

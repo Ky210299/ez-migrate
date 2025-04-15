@@ -4,6 +4,10 @@ import { CONFIG_PATH, DEFAULT_CONFIG, MIGRATIONS_DILALECTS } from "./constants";
 
 import type { Config } from "./types";
 
+/**
+ * Class for read the configuration file ez-migrate.json. By default returns the
+ * default configuration 
+*/
 export default class ConfigReader {
     private config: Config = DEFAULT_CONFIG;
     constructor() {
@@ -27,12 +31,14 @@ export default class ConfigReader {
         }
     }
 
+    /** Validate the essentials configuration and throw if are wrong */
     private validateConfig() {
         if (typeof this.config !== "object") throw new Error("Invalid configuration file.");
         else if (Object.values(MIGRATIONS_DILALECTS).includes(this.config.dialect) === false)
             throw new Error("Invalid dialect");
     }
 
+    /** Returns the config object */
     getConfig() {
         return this.config;
     }

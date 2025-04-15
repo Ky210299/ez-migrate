@@ -4,9 +4,13 @@ import { DEFAULT_MIGRATION_PATH } from "./constants";
 import Migration from "./Migration";
 
 type SchemaHandlerArguments = { migrationsPath: string };
+
+/** Class for handle the migrations file schemas */
 export default class SchemasHandler {
+    /** The separator for up and down sql  */
     private readonly upDownSeparatorRE = /^-- ez-migration-(up|down)\n/gm;
     private readonly migrationsPath: string;
+    /** Migration file template. It's necessary to use this for successfuly run migrations */
     private readonly migrationSQLTemplate = `
 -- ez-migration-up
     -- Write the SQL to apply the migration here

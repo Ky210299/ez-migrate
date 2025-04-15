@@ -4,6 +4,7 @@ import SqlitePersistency from "./SqlitePersistency";
 
 import { Config } from "./types";
 
+/** Create a tracker for the migrations. By default use sqlite */
 export default class TrackerFactory {
     private constructor() {
         throw new Error("PersistencyFactory is a static class. Not constructor allow");
@@ -17,7 +18,7 @@ export default class TrackerFactory {
         switch (trackerDialect) {
             default: {
                 const { sqlite } = config;
-                const {trackerPath} = sqlite
+                const { trackerPath } = sqlite
                 const sqlitePersistency = new SqlitePersistency({ trackerPath })
                 return new Repository(sqlitePersistency);
             }

@@ -4,7 +4,7 @@ import { MySQLConnection } from "./DatabaseConnector.js";
 
 export default class MysqlConnection implements MySQLConnection {
     private readonly pool: Pool;
-    readonly SGDBName: string = "mysql";
+    readonly DBMSName: string = "mysql";
     readonly host: string;
     readonly user: string;
     readonly password: string | undefined;

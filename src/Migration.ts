@@ -35,6 +35,7 @@ export default class Migration {
         this.path = path;
     }
 
+    /** Returns the data of the migrations */
     getDetails() {
         return {
             migratedAt: this.migratedAt,

@@ -4,8 +4,7 @@ import DatabaseConnector from "./DatabaseConnector"
 import { Config } from "./types";
 import SqliteConnection from "./sqlite";
 
-
-
+/** Create DBMS connections by they dialect. Throw if doesn't support the dialect */
 export default class ConnectionFactory {
     private constructor() { throw new Error("Not constructor allow for ConnectionFactory") };
     static create(config: Config) {
@@ -28,10 +27,13 @@ export default class ConnectionFactory {
                 })
                 return new DatabaseConnector(mysqlConnection)
             }
-            default: {
+            case MIGRATIONS_DILALECTS.sqlite: {
                 const { sqlite } = config;
                 const sqliteConnection = new SqliteConnection(sqlite.trackerPath);
                 return new DatabaseConnector(sqliteConnection)
+            }
+            default: {
+                throw new Error("Migration dialect not supported")
             }
         }
     }

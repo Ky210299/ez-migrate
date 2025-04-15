@@ -2,6 +2,7 @@ import type DatabaseConnector from "./DatabaseConnector";
 import Migration from "./Migration";
 import Repository from "./Repository";
 
+/** Class that execute and track the migration(s) */
 class MigrationExecutor {
     private readonly dbconnector: DatabaseConnector;
     private readonly tracker: Repository
