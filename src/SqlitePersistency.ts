@@ -164,8 +164,12 @@ export default class SqlitePersistency implements Persistency {
     
     async getLastBatchMigrationDone() {
         const query = this.db.prepare(`
-                SELECT * FROM ${TABLE_NAME} 
-                ORDER BY ${this.MIGRATION_COLUMNS.BATCH_ID} DESC LIMIT 1
+                SELECT * FROM ${TABLE_NAME}
+                WHERE ${this.MIGRATION_COLUMNS.BATCH_ID} = (
+                    SELECT ${this.MIGRATION_COLUMNS.BATCH_ID} FROM ${TABLE_NAME} 
+                    ORDER BY ${this.MIGRATION_COLUMNS.MIGRATED_AT} DESC LIMIT 1
+                )
+                ORDER BY ${this.MIGRATION_COLUMNS.MIGRATED_AT} DESC
             `);
         const migrationsData = query.all() as DBMigrationData[]
         if (migrationsData.length === 0) return null;
