@@ -134,15 +134,15 @@ export default class SchemasHandler {
             throw new Error(
                 "The reference migration must be an existing migration file, in the migration folder",
             );
-        const nextSchema = schemasFilesName
+        const previousSchema = schemasFilesName
             .reverse()
             .find(
                 (migrationName) =>
                     migrationName.endsWith(".sql") && migrationName < migrationFileName,
             );
-        if (nextSchema == null) return null;
+        if (previousSchema == null) return null;
 
-        const path = `${this.migrationsPath}/${nextSchema}`;
+        const path = `${this.migrationsPath}/${previousSchema}`;
         return new Migration({
             ...this.splitUpAndDownFromSQL(this.readSQL(path)),
             path,
