@@ -72,9 +72,10 @@ export default class SqlitePersistency implements Persistency {
             insert.run(...values);
         } catch (err) {
             console.error(err);
-            await rollback();
+            throw new Error("Error tracking migration");
+        } finally {
+            return { commit, rollback };
         }
-        return { commit, rollback };
     }
     
     async remove(migrations: Array<MigrationData>) {
