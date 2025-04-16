@@ -1,6 +1,7 @@
 import { writeFileSync, mkdirSync, readdirSync, readFileSync, existsSync } from "node:fs";
 import { ERRORS, isErrnoException } from "./Errors";
 import { DEFAULT_MIGRATION_PATH } from "./constants";
+import { randomUUID } from "node:crypto";
 import Migration from "./Migration";
 
 type SchemaHandlerArguments = { migrationsPath: string };
@@ -124,6 +125,7 @@ export default class SchemasHandler {
 
         const path = `${this.migrationsPath}/${nextSchema}`;
         return new Migration({
+            batchId: randomUUID(),
             ...this.splitUpAndDownFromSQL(this.readSQL(path)),
             path,
         });
@@ -144,6 +146,7 @@ export default class SchemasHandler {
 
         const path = `${this.migrationsPath}/${previousSchema}`;
         return new Migration({
+            batchId: randomUUID(),
             ...this.splitUpAndDownFromSQL(this.readSQL(path)),
             path,
         });
@@ -158,11 +161,13 @@ export default class SchemasHandler {
         const nextSchemas = schemasFilesName.filter(
             (migrationName) => migrationName.endsWith(".sql") && migrationName > migrationFileName,
         );
+        const batchId = randomUUID() as unknown as string;
         return nextSchemas.flatMap((schemaName) => {
             if (schemaName == null) return [];
 
             const path = `${this.migrationsPath}/${schemaName}`;
             return new Migration({
+                batchId,
                 ...this.splitUpAndDownFromSQL(this.readSQL(path)),
                 path,
             });
@@ -181,11 +186,13 @@ export default class SchemasHandler {
                 (migrationName) =>
                     migrationName.endsWith(".sql") && migrationName < migrationFileName,
             );
+        const batchId = randomUUID() as unknown as string;
         return nextSchemas.flatMap((schemaName) => {
             if (schemaName == null) return [];
 
             const path = `${this.migrationsPath}/${schemaName}`;
             return new Migration({
+                batchId,
                 ...this.splitUpAndDownFromSQL(this.readSQL(path)),
                 path,
             });
@@ -203,10 +210,11 @@ export default class SchemasHandler {
         return this.addMigrationPathToSchemasName(schemasFilesNames).sort();
     }
     
-    makeMigrationFromFile(filePath: string) {
+    makeMigrationFromFile(filePath: string, batchId?: string) {
         const sql = this.readSQL(filePath)
         if (!sql) throw new Error("Migration file is empty or doesn't exists");
         return new Migration({
+            batchId: batchId ?? randomUUID(),
             ...this.splitUpAndDownFromSQL(sql),
             path: filePath,
         });

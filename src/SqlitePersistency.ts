@@ -4,11 +4,16 @@ import Migration, { MigrationData } from "./Migration.js";
 
 import type { DatabaseSync } from "node:sqlite";
 
+type DBMigrationData =
+    Pick<MigrationData, "path" | "up" | "down"> 
+    &
+    { batch_id: MigrationData["batchId"], migrated_at: MigrationData["migratedAt"] };
 type SqlitePersistencyArguments = { trackerPath: string };
 
 export default class SqlitePersistency implements Persistency {
     private readonly MIGRATION_TABLE = TABLE_NAME;
     private readonly MIGRATION_COLUMNS = {
+        BATCH_ID: "batch_id",
         MIGRATED_AT: "migrated_at",
         UP: "up",
         DOWN: "down",
@@ -78,13 +83,13 @@ export default class SqlitePersistency implements Persistency {
         }
     }
     
-    async remove(migrations: Array<MigrationData>) {
+    async removeMigrationBatch(migrations: Array<MigrationData>) {
         this.db.exec("BEGIN TRANSACTION");
         const placeholders = new Array(migrations.length).fill("?").join(",")
-        const values = migrations.map(m => m.path);
+        const values = migrations.map(m => m.batchId);
         const sql = `
                 DELETE FROM ${TABLE_NAME} WHERE
-                ${this.MIGRATION_COLUMNS.PATH} IN (${placeholders})
+                ${this.MIGRATION_COLUMNS.BATCH_ID} IN (${placeholders})
         `
         const q = this.db.prepare(sql)
         
@@ -108,11 +113,40 @@ export default class SqlitePersistency implements Persistency {
             return { commit, rollback };
         }
     }
+    
     async list() {
         const query = this.db.prepare(`
             SELECT * FROM ${this.MIGRATION_TABLE};
             `);
         return query.all() as unknown as Migration[];
+    }
+    
+    async removeMigration(migration: MigrationData) {
+        this.db.exec("BEGIN TRANSACTION");
+        const sql = `
+                DELETE FROM ${TABLE_NAME} WHERE
+                ${this.MIGRATION_COLUMNS.MIGRATED_AT} = ?
+        `
+        const q = this.db.prepare(sql)
+        
+        // Returns commit or rollback function that will be used
+        // when the migration is done successfuly (commit) or not (rollback)
+        const commit: Commit = async () => {
+            this.db.exec("COMMIT")
+            console.log("Commit tracker successfuly")
+        };
+        const rollback: Rollback = async () => {
+            this.db.exec("ROLLBACK");
+            console.warn("Rollback tracker successfuly")
+        }
+        try {
+            q.run(migration.migratedAt);
+        } catch (err) {
+            console.error(err);
+            throw new Error("Error tracking the migration")
+        } finally {
+            return { commit, rollback };
+        }
     }
 
     async getLastMigrationDone() {
@@ -120,7 +154,26 @@ export default class SqlitePersistency implements Persistency {
                 SELECT * FROM ${TABLE_NAME} 
                 ORDER BY ${this.MIGRATION_COLUMNS.MIGRATED_AT} DESC LIMIT 1
             `);
-        const migrationData = query.get() as MigrationData
-        return migrationData != null ? new Migration(migrationData) : null;
+        const migrationData = query.get() as DBMigrationData
+        return migrationData != null ? new Migration({
+            ...migrationData,
+            migratedAt: migrationData.migrated_at,
+            batchId: migrationData.batch_id
+        }) : null;
+    }
+    
+    async getLastBatchMigrationDone() {
+        const query = this.db.prepare(`
+                SELECT * FROM ${TABLE_NAME} 
+                ORDER BY ${this.MIGRATION_COLUMNS.BATCH_ID} DESC LIMIT 1
+            `);
+        const migrationsData = query.all() as DBMigrationData[]
+        if (migrationsData.length === 0) return null;
+        
+        return migrationsData.map(m => new Migration({
+            ...m,
+            migratedAt: m.migrated_at,
+            batchId: m.batch_id
+        }))
     }
 }

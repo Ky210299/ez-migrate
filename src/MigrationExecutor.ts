@@ -28,7 +28,7 @@ class MigrationExecutor {
         await this.dbconnector.testConnection();
         await this.dbconnector.initConnection();
         const migrationData = migration.getDetails();
-        const { commit, rollback } = await this.tracker.remove([migrationData]);
+        const { commit, rollback } = await this.tracker.removeMigration(migrationData);
         try {
             await this.dbconnector.runSQL(migrationData.down);
             await commit();

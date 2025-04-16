@@ -6,11 +6,12 @@ export const TABLE_NAME = "ez_migration";
  */
 export const TRACKER_SCHEMA = `
     CREATE TABLE ${TABLE_NAME} (
-        migrated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        batch_id CHAR(36),
+        migrated_at DATETIME UNIQUE NOT NULL,
         up TEXT NOT NULL,
         down TEXT NOT NULL,
         path VARCHAR(255) NOT NULL UNIQUE,
-        PRIMARY KEY (migrated_at)
+        PRIMARY KEY (batch_id, migrated_at)
     )
     `.trim();
 /** Commit is a async function that does a commit to a started transaction */
@@ -21,19 +22,22 @@ export type Rollback = () => Promise<void>;
 export interface Persistency {
     /** 
      *  Save begins a transaction and returns the commit and rollback functions that
-     *  are called if the migrations is done successfuly (commit) or  fails (rollback)
+     *  are called if the migrations is done successfuly (commit) or fails (rollback)
      */
     save: (migrations: Array<MigrationData>) => Promise<{ commit: Commit; rollback: Rollback }>;
     
     /** 
      *  Begins a transaction and returns the commit and rollback functions that
-     *  are called if the migrations is removed successfuly (commit) or  fails (rollback)
+     *  are called if the migrations is removed successfuly (commit) or fails (rollback)
      */
-    remove: (migrations: Array<MigrationData>) => Promise<{ commit: Commit; rollback: Rollback }>;
+    removeMigrationBatch: (migrations: Array<MigrationData>) => Promise<{ commit: Commit; rollback: Rollback }>;
+    
+    removeMigration: (migration: MigrationData) => Promise<{ commit: Commit; rollback: Rollback }>;
     /** List all migrations successfuly done */
     list: () => Promise<Array<Migration>>;
     /** Return the last migration done if exists, null otherwise */
     getLastMigrationDone: () => Promise<Migration | null>;
+    getLastBatchMigrationDone: () => Promise<Array<Migration> | null>
 }
 
 /** Repository for the migration tracker persistency */
@@ -50,12 +54,20 @@ export default class Repository {
             process.exit("\n Error while saving the migrations registry\n");
         }
     }
-    async remove(migrations: Array<MigrationData>) {
+    async removeMigrationBatch(migrations: Array<MigrationData>) {
         try {
-            return await this.persistency.remove(migrations);
+            return await this.persistency.removeMigrationBatch(migrations);
         } catch (err) {
             console.error(err);
             process.exit("\n Error while removing the migrations registry\n");
+        }
+    }
+    async removeMigration(migration: MigrationData) {
+        try {
+            return await this.persistency.removeMigration(migration);
+        } catch (err) {
+            console.error(err);
+            process.exit("\n Error while removing the migration registry\n");
         }
     }
     async listMigrations() {
@@ -63,5 +75,8 @@ export default class Repository {
     }
     async getLastMigrationDone() {
         return await this.persistency.getLastMigrationDone()
+    }
+    async getLastBatchMigrationDone(){
+        return await this.persistency.getLastBatchMigrationDone();
     }
 }

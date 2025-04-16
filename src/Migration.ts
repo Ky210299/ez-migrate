@@ -1,12 +1,14 @@
 import { MigrateError } from "./Errors";
 
 export type MigrationData = {
+    batchId: string | null // The batch id where the Migration was run it
     migratedAt: string;
     up: string;
     down: string;
     path: string;
 };
 export default class Migration {
+    private readonly batchId: string | null;
     private readonly migratedAt: string;
     private readonly up: string;
     private readonly down: string;
@@ -22,14 +24,15 @@ export default class Migration {
         return now.concat(`.${ns.toString().substring(3, 7)}`);
     }
 
-    constructor(data: Omit<MigrationData, "migratedAt">) {
+    constructor(data: Omit<MigrationData, "batchId" | "migratedAt"> & { batchId?: MigrationData["batchId"], migratedAt?: MigrationData["migratedAt"] }) {
         if (data == null) throw new MigrateError("Invalid migration data")
-        const { up, down, path } = data;
+        const { batchId, up, down, path, migratedAt } = data;
         if (!up) throw new Error('SQL fragment for "up" the migration, is missing');
         else if (!down) throw new Error("Missing down migration");
         else if (!path) throw new Error("Migration path must be espeficied");
 
-        this.migratedAt = Migration.getPreciseNow();
+        this.batchId = batchId ?? null;
+        this.migratedAt = migratedAt ?? Migration.getPreciseNow();
         this.up = up;
         this.down = down;
         this.path = path;
@@ -38,6 +41,7 @@ export default class Migration {
     /** Returns the data of the migrations */
     getDetails() {
         return {
+            batchId: this.batchId,
             migratedAt: this.migratedAt,
             up: this.up,
             down: this.down,

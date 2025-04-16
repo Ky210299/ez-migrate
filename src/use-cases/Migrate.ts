@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import ConfigReader from "../ConfigReader";
 import ConnectionFactory from "../ConnectionFactory";
 import MigrationExecutor from "../MigrationExecutor";
@@ -25,8 +26,9 @@ export default class Migrate {
             await migrationExecutor.executeMigrationsUp(allNext);
             return;
         }
+        const batchId = randomUUID();
         const migrations = schemaHandler.getAllMigrations().map(m => {
-            return schemaHandler.makeMigrationFromFile(m)
+            return schemaHandler.makeMigrationFromFile(m, batchId);
         });
         if (migrations.length === 0) throw new Error("Not migrations available");
         await migrationExecutor.executeMigrationsUp(migrations);
