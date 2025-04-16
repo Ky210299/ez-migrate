@@ -1,8 +1,29 @@
-import MysqlConnection from "./mysql.js";
+import Down from "./use-cases/Down";
+import Migrate from "./use-cases/Migrate";
+import Up from "./use-cases/Up";
 
-const mysqlConnection = new MysqlConnection({});
-(async () => {
-    console.log(await mysqlConnection.isConnected());
-    console.log(await mysqlConnection.runSQL("SELECT 1"));
-    process.exit()
-})();
+; (async () => {
+    try {
+        const command = process.argv[2];
+        switch (command){
+            case "up":{
+                 await Up.run();
+                 break;
+            }
+            case "down":{
+                 await Down.run();
+                 break;
+            }
+            default: {
+                await Migrate.run()
+                break;
+            }
+        }
+        process.exit();
+    } catch (err) {
+        if(err instanceof Error) console.error(err.message)
+        else console.error(err);
+    } finally {
+        process.exit()
+    }
+})()
