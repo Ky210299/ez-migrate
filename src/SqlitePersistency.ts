@@ -76,6 +76,37 @@ export default class SqlitePersistency implements Persistency {
         }
         return { commit, rollback };
     }
+    
+    async remove(migrations: Array<MigrationData>) {
+        this.db.exec("BEGIN TRANSACTION");
+        const placeholders = new Array(migrations.length).fill("?").join(",")
+        const values = migrations.map(m => m.path);
+        const sql = `
+                DELETE FROM ${TABLE_NAME} WHERE
+                ${this.MIGRATION_COLUMNS.PATH} IN (${placeholders})
+        `
+        const q = this.db.prepare(sql)
+        
+        // Returns commit or rollback function that will be used
+        // when the migration is done successfuly (commit) or not (rollback)
+        const commit: Commit = async () => {
+            this.db.exec("COMMIT")
+            console.log("Commit tracker successfuly")
+        };
+        const rollback: Rollback = async () => {
+            this.db.exec("ROLLBACK");
+            console.warn("Rollback tracker successfuly")
+        }
+        
+        try {
+            q.run(...values);
+        } catch (err) {
+            console.error(err);
+            throw new Error("Error tracking the migration")
+        } finally {
+            return { commit, rollback };
+        }
+    }
     async list() {
         const query = this.db.prepare(`
             SELECT * FROM ${this.MIGRATION_TABLE};

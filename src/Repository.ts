@@ -23,7 +23,13 @@ export interface Persistency {
      *  Save begins a transaction and returns the commit and rollback functions that
      *  are called if the migrations is done successfuly (commit) or  fails (rollback)
      */
-    save: (migration: Array<MigrationData>) => Promise<{ commit: Commit; rollback: Rollback }>;
+    save: (migrations: Array<MigrationData>) => Promise<{ commit: Commit; rollback: Rollback }>;
+    
+    /** 
+     *  Begins a transaction and returns the commit and rollback functions that
+     *  are called if the migrations is removed successfuly (commit) or  fails (rollback)
+     */
+    remove: (migrations: Array<MigrationData>) => Promise<{ commit: Commit; rollback: Rollback }>;
     /** List all migrations successfuly done */
     list: () => Promise<Array<Migration>>;
     /** Return the last migration done if exists, null otherwise */
@@ -42,6 +48,14 @@ export default class Repository {
         } catch (err) {
             console.error(err);
             process.exit("\n Error while saving the migrations registry\n");
+        }
+    }
+    async remove(migrations: Array<MigrationData>) {
+        try {
+            return await this.persistency.remove(migrations);
+        } catch (err) {
+            console.error(err);
+            process.exit("\n Error while removing the migrations registry\n");
         }
     }
     async listMigrations() {

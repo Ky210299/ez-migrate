@@ -26,13 +26,14 @@ class MigrationExecutor {
     }
     async executeSingleMigrationDown(migration: Migration) {
         await this.dbconnector.testConnection();
-        const migrationData = migration.getDetails()
-        const { commit, rollback } = await this.tracker.save([migrationData]);
+        await this.dbconnector.initConnection();
+        const migrationData = migration.getDetails();
+        const { commit, rollback } = await this.tracker.remove([migrationData]);
         try {
             await this.dbconnector.runSQL(migrationData.down);
-            await commit()
+            await commit();
         } catch (err) {
-            await rollback()
+            await rollback();
         }
     };
     async executeMigrationsUp(migrations: Array<Migration>) {
