@@ -8,7 +8,8 @@
     "build": "pnpm exec tsc",
     "migrate":  "node --run build && node --experimental-sqlite dist/ez-migrate.js",
     "migrate:up": "node --run build && node --experimental-sqlite dist/ez-migrate.js up",
-    "migrate:down": "node --run build && node --experimental-sqlite dist/ez-migrate.js down"
+    "migrate:down": "node --run build && node --experimental-sqlite dist/ez-migrate.js down",
+    "migrate:rollback": "node --run build && node --experimental-sqlite dist/ez-migrate.js down"
   },
   "keywords": [
     "migrations",
