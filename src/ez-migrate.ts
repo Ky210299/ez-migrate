@@ -1,5 +1,6 @@
 import Down from "./use-cases/Down";
 import Migrate from "./use-cases/Migrate";
+import Rollback from "./use-cases/Rollback";
 import Up from "./use-cases/Up";
 
 ; (async () => {
@@ -13,6 +14,10 @@ import Up from "./use-cases/Up";
             case "down":{
                  await Down.run();
                  break;
+            }
+            case "rollback": {
+                await Rollback.run();
+                break;
             }
             default: {
                 await Migrate.run()

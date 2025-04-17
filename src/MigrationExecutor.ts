@@ -59,6 +59,22 @@ class MigrationExecutor {
             await rollback()
         }
     }
+    async executeBatchDown(migrations: Array<Migration>) {
+        if (migrations.length === 0) throw new Error("No migration for execute down");
+        await this.dbconnector.testConnection();
+        await this.dbconnector.initConnection();
+        const migrationsData = migrations.map(m => m.getDetails());
+        const { batchId } = migrationsData[0];
+        if (!batchId) throw new Error("Invalid batch id");
+        if (!migrationsData.every(m => m.batchId === batchId)) throw new Error("All migrations doesn't have the same batch id")
+        const { commit, rollback } = await this.tracker.removeMigrations(migrationsData);
+        try {
+            await this.dbconnector.runSQL(migrationsData.map(m => m.down).join(""));
+            await commit()
+        } catch (err) {
+            await rollback()
+        }
+    }
 }
 
 export default MigrationExecutor;

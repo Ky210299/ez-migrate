@@ -83,13 +83,13 @@ export default class SqlitePersistency implements Persistency {
         }
     }
     
-    async removeMigrationBatch(migrations: Array<MigrationData>) {
+    async removeMigrations(migrations: Array<MigrationData>) {
         this.db.exec("BEGIN TRANSACTION");
         const placeholders = new Array(migrations.length).fill("?").join(",")
-        const values = migrations.map(m => m.batchId);
+        const values = migrations.map(m => m.migratedAt);
         const sql = `
                 DELETE FROM ${TABLE_NAME} WHERE
-                ${this.MIGRATION_COLUMNS.BATCH_ID} IN (${placeholders})
+                ${this.MIGRATION_COLUMNS.MIGRATED_AT} IN (${placeholders})
         `
         const q = this.db.prepare(sql)
         
@@ -103,7 +103,6 @@ export default class SqlitePersistency implements Persistency {
             this.db.exec("ROLLBACK");
             console.warn("Rollback tracker successfuly")
         }
-        
         try {
             q.run(...values);
         } catch (err) {
