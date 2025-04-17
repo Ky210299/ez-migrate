@@ -50,8 +50,9 @@ class MigrationExecutor {
     }
     async executeMigrationsDown(migrations: Array<Migration>) {
         await this.dbconnector.testConnection();
+        await this.dbconnector.initConnection();
         const migrationsData = migrations.map(m => m.getDetails());
-        const { commit, rollback } = await this.tracker.save(migrationsData);
+        const { commit, rollback } = await this.tracker.removeMigrations(migrationsData);
         try {
             await this.dbconnector.runSQL(migrationsData.map(m => m.down).join(""));
             await commit()

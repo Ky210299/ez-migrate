@@ -117,7 +117,12 @@ export default class SqlitePersistency implements Persistency {
         const query = this.db.prepare(`
             SELECT * FROM ${this.MIGRATION_TABLE};
             `);
-        return query.all() as unknown as Migration[];
+        const migrations = query.all() as unknown as Array<DBMigrationData>;
+        return migrations.map(m => new Migration({
+            ...m,
+            batchId: m.batch_id,
+            migratedAt: m.migrated_at,
+        }));
     }
     
     async removeMigration(migration: MigrationData) {
