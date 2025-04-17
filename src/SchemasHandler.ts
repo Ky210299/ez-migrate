@@ -9,7 +9,7 @@ type SchemaHandlerArguments = { migrationsPath: string };
 /** Class for handle the migrations file schemas */
 export default class SchemasHandler {
     /** The separator for up and down sql  */
-    private readonly upDownSeparatorRE = /^-- ez-migration-(up|down)\n/gm;
+    private readonly upDownSeparatorRE = /^-- ez-migration-(up|down)/gm;
     private readonly migrationsPath: string;
     /** Migration file template. It's necessary to use this for successfuly run migrations */
     private readonly migrationSQLTemplate = `
@@ -60,21 +60,12 @@ export default class SchemasHandler {
             const { index } = match;
             info.push({ text, direction, index });
         }
-        const upInfo = info
-            .flatMap((inf) => {
-                if (inf.direction !== "up") return [];
-                else return inf;
-            })
-            .slice(0, 2);
-        const downInfo = info
-            .flatMap((inf) => {
-                if (inf.direction !== "down") return [];
-                else return inf;
-            })
-            .slice(0, 2);
-        if (upInfo.length + downInfo.length < 3)
+        const upInfo = info.filter((inf) => inf.direction === "up").slice(0, 2);
+        const downInfo = info.filter((inf) => inf.direction === "down").slice(0, 2);
+        
+        if (upInfo.length + downInfo.length < 3) {
             throw new Error("Bad SQL migration format. Use the correct template");
-
+        }
         const upIndexs = upInfo.map(({ index }) => index);
         const downIndexs = downInfo.map(({ index }) => index);
 
