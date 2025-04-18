@@ -14,8 +14,8 @@ export default class Status {
         })
         const status = new Array(Math.max(allMigrations.length, allMigrationsDone.length))
         for (const migration of allMigrations) {
-            if (allMigrationsDone.includes(migration)) status.push("✔ ", migration)
-            else status.push("✘ ", migration)
+            if (allMigrationsDone.includes(migration)) status.push(`✔ ${migration}`)
+            else status.push(`✘ ${migration}`)
         }
         console.log(status)
     }
