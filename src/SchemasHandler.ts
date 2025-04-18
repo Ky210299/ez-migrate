@@ -37,7 +37,7 @@ export default class SchemasHandler {
             throw err;
         }
     }
-    private getSchemasFilesName(): Array<string> {
+    getSchemasFilesName(): Array<string> {
         this.ensureMigrationPathExists();
         if (this.migrationsPath == null) throw new Error("No migrations path provided");
         const schemas = readdirSync(this.migrationsPath).filter((path) => path.endsWith(".sql"));

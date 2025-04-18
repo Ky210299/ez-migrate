@@ -10,7 +10,8 @@
         "migrate:up": "node --run build && node --experimental-sqlite dist/ez-migrate.js up",
         "migrate:down": "node --run build && node --experimental-sqlite dist/ez-migrate.js down",
         "migrate:rollback": "node --run build && node --experimental-sqlite dist/ez-migrate.js rollback",
-        "migrate:reset": "node --run build && node --experimental-sqlite dist/ez-migrate.js reset"
+        "migrate:reset": "node --run build && node --experimental-sqlite dist/ez-migrate.js reset",
+        "migrate:status": "node --run build && node --experimental-sqlite dist/ez-migrate.js status"
     },
     "keywords": [
         "migrations",
