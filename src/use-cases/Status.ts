@@ -6,16 +6,24 @@ export default class Status {
     public static async run() {
         const config = new ConfigReader().getConfig();
         const schemaHandler = new SchemasHandler(config.migrationsPath);
-        const allMigrations = schemaHandler.getSchemasFilesName();
+        const allMigrations = schemaHandler.getAllMigrations().map(m => schemaHandler.makeMigrationFromFile(m));
         const tracker = TrackerFactory.create(config);
-        const allMigrationsDone = (await tracker.listMigrations()).map(m => {
-            const path = m.getDetails().path;
-            return path.substring(path.lastIndexOf("/") + 1);
-        })
+        const allMigrationsDone = await tracker.listMigrations();
+        
         const status = new Array(Math.max(allMigrations.length, allMigrationsDone.length))
+        
         for (const migration of allMigrations) {
-            if (allMigrationsDone.includes(migration)) status.push(`✔ ${migration}`)
-            else status.push(`✘ ${migration}`)
+            const { path, up } = migration.getDetails()
+            const name = path.substring(path.lastIndexOf("/") + 1)
+            
+            const migrationDone =allMigrationsDone.find(m => m.getDetails().path === path);
+            const isDone = migrationDone != null;
+            
+            const hasDifferentUp = up.trim() !== migrationDone?.getDetails().up.trim();
+            
+            if (isDone && hasDifferentUp) status.push(`⚠️ - ${name}`)
+            else if (isDone) status.push(`✔ - ${name}`)
+            else status.push(`✘ - ${name}`);
         }
         console.log(status)
     }
