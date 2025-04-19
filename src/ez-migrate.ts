@@ -2,12 +2,17 @@ import Down from "./use-cases/Down";
 import Migrate from "./use-cases/Migrate";
 import Reset from "./use-cases/Reset";
 import Rollback from "./use-cases/Rollback";
+import Status from "./use-cases/Status";
 import Up from "./use-cases/Up";
 
 ; (async () => {
     try {
         const command = process.argv[2];
         switch (command){
+            case "status": {
+                await Status.run()
+                break;
+            }
             case "up":{
                  await Up.run();
                  break;
