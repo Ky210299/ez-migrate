@@ -33,7 +33,7 @@ export default class Up {
         const tracker = TrackerFactory.create(config);
         const { migrationsPath } = config;
         const schemaHandler = new SchemasHandler({ migrationsPath });
-        const nextMigration = await this.getNextMigration(schemaHandler, tracker);
+        const nextMigration = await Up.getNextMigration(schemaHandler, tracker);
         
         if (!nextMigration) throw new Error("There is not a next migration available");
         else if (schemaHandler.hasDML(nextMigration.getDetails().up)) {
