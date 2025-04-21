@@ -9,7 +9,8 @@ type SchemaHandlerArguments = { migrationsPath: string };
 /** Class for handle the migrations file schemas */
 export default class SchemasHandler {
     /** The separator for up and down sql  */
-    private readonly upDownSeparatorRE = /^-- ez-migration-(up|down)/gm;
+    private readonly upDownSeparatorRegExp = /^-- ez-migration-(up|down)/gm;
+    private readonly DMLRegExp = /(?:^|;)\s*(?:INSERT\s+INTO|DELETE\s+FROM|UPDATE)\b/mi
     private readonly migrationsPath: string;
     /** Migration file template. It's necessary to use this for successfuly run migrations */
     private readonly migrationSQLTemplate = `
@@ -23,6 +24,9 @@ export default class SchemasHandler {
 `.trim();
     constructor({ migrationsPath }: SchemaHandlerArguments) {
         this.migrationsPath = migrationsPath ?? DEFAULT_MIGRATION_PATH;
+    }
+    hasDML(sql: string){
+        return this.DMLRegExp.test(sql);
     }
 
     private ensureMigrationPathExists() {
@@ -53,7 +57,7 @@ export default class SchemasHandler {
     }
 
     private splitUpAndDownFromSQL(sql: string) {
-        const matches = sql.matchAll(this.upDownSeparatorRE);
+        const matches = sql.matchAll(this.upDownSeparatorRegExp);
         let info = [];
         for (const match of matches) {
             const [text, direction] = match;

@@ -22,7 +22,14 @@ export default class Migrate {
             const migrationPath = lastMigration.getDetails().path
             const cleanName = migrationPath.substring(migrationPath.lastIndexOf("/") + 1);
             const allNext = schemaHandler.allNextTo(cleanName);
-            if(allNext.length === 0) throw new Error("Not migrations available")
+            
+            if (allNext.length === 0) throw new Error("Not migrations available")
+            const migrationWithDML = allNext.find(m => schemaHandler.hasDML(m.getDetails().up));
+            if (migrationWithDML != null) {
+                throw new Error(`File ${migrationWithDML.getDetails().path} has DML.
+                    Migrations files cannot have DML statements. Use Seeds instead`)
+            }
+            
             await migrationExecutor.executeMigrationsUp(allNext);
             return;
         }
@@ -31,6 +38,13 @@ export default class Migrate {
             return schemaHandler.makeMigrationFromFile(m, batchId);
         });
         if (migrations.length === 0) throw new Error("Not migrations available");
+        
+        const migrationWithDML = migrations.find(m => schemaHandler.hasDML(m.getDetails().up));
+        if (migrationWithDML != null) {
+            throw new Error(`File ${migrationWithDML.getDetails().path} has DML.
+                Migrations files cannot have DML statements. Use Seeds instead`)
+        }
+        
         await migrationExecutor.executeMigrationsUp(migrations);
     }
 }

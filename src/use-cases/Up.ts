@@ -4,17 +4,13 @@ import SchemasHandler from "../SchemasHandler";
 import ConnectionFactory from "../ConnectionFactory";
 import TrackerFactory from "../TrackerFactory";
 import Repository from "../Repository";
-import { Config } from "../types";
 
 /** Class for running the Up use case */
 export default class Up {
     /** returns the next Migration available next to the last done. If not last migration done,
      * use the first migration file, throw otherwise.
     */
-    private static async getNextMigration(config: Config, tracker: Repository) {
-        const { migrationsPath } = config;
-        const schemaHandler = new SchemasHandler({ migrationsPath });
-        
+    private static async getNextMigration(schemaHandler: SchemasHandler, tracker: Repository) {
         const lastMigration = await tracker.getLastMigrationDone();
         if (lastMigration == null) {
             const firstMigrationFile = schemaHandler.getAllMigrations().at(0);
@@ -35,8 +31,15 @@ export default class Up {
         const config = configReader.getConfig();
         
         const tracker = TrackerFactory.create(config);
-        const nextMigration = await this.getNextMigration(config, tracker);
+        const { migrationsPath } = config;
+        const schemaHandler = new SchemasHandler({ migrationsPath });
+        const nextMigration = await this.getNextMigration(schemaHandler, tracker);
+        
         if (!nextMigration) throw new Error("There is not a next migration available");
+        else if (schemaHandler.hasDML(nextMigration.getDetails().up)) {
+            throw new Error(`Migration file with DML: ${nextMigration.getDetails().path}
+                Migrations files cannot have DML statements. Use Seeds instead`)
+        }
         
         const connection = ConnectionFactory.create(config);
         const migrationExecutor = new MigrationExecutor(connection, tracker);
