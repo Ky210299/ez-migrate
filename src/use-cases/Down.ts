@@ -18,5 +18,6 @@ export default class Down {
         const migrationExecutor = new MigrationExecutor(connection, tracker);
         
         await migrationExecutor.executeSingleMigrationDown(lastMigration);
+        process.exit();
     }
 }

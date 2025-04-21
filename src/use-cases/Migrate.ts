@@ -31,7 +31,7 @@ export default class Migrate {
             }
             
             await migrationExecutor.executeMigrationsUp(allNext);
-            return;
+            process.exit()
         }
         const batchId = randomUUID();
         const migrations = schemaHandler.getAllMigrations().map(m => {
@@ -44,7 +44,7 @@ export default class Migrate {
             throw new Error(`File ${migrationWithDML.getDetails().path} has DML.
                 Migrations files cannot have DML statements. Use Seeds instead`)
         }
-        
         await migrationExecutor.executeMigrationsUp(migrations);
+        process.exit()
     }
 }

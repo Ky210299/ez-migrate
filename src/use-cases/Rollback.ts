@@ -13,5 +13,6 @@ export default class Rollback {
         const connection = ConnectionFactory.create(config);
         const migrationExecutor = new MigrationExecutor(connection, tracker);
         await migrationExecutor.executeBatchDown(lastBatchMigrationDone);
+        process.exit();
     }
 }
