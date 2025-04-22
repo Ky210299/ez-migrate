@@ -1,3 +1,3 @@
 import program from "./CLI";
 
-program.parseAsync().then().catch(e => console.error("\n" + e.message))
+program.parseAsync(process.argv).then().catch(e => console.error("\n" + e.message))
