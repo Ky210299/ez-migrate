@@ -25,7 +25,7 @@ export default class Status {
             else if (isDone) status.push(`✔ - ${name}`)
             else status.push(`✘ - ${name}`);
         }
-        console.log(status)
+        console.log(status.reverse())
     }
     
 }
