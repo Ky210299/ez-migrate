@@ -11,10 +11,10 @@ export default class SchemasHandler {
     /** The separator for up and down sql  */
     private readonly upDownSeparatorRegExp = /^-- ez-migration-(up|down)/gm;
     private readonly DMLRegExp = /(?:^|;)\s*(?:INSERT\s+INTO|DELETE\s+FROM|UPDATE)\b/mi
+    private readonly SQLCommentsRegExp = /(--|#|\/\/).*$/gm
     private readonly migrationsPath: string;
     /** Migration file template. It's necessary to use this for successfuly run migrations */
-    private readonly migrationSQLTemplate = `
--- ez-migration-up
+    private readonly migrationSQLTemplate = `-- ez-migration-up
     -- Write the SQL to apply the migration here
 -- ez-migration-up
     -- (Optional) Add comments or leave empty between up/down sections
@@ -29,6 +29,11 @@ export default class SchemasHandler {
         return this.DMLRegExp.test(sql);
     }
 
+    private normalizeSQL(sql: string) {
+        const withoutComments = sql.replace(this.SQLCommentsRegExp, " ");
+        const withoutLineBreaks = withoutComments.replace(/\n/g, " ")
+        return withoutLineBreaks.replace(/\s+/g, " ");
+    }
     private ensureMigrationPathExists() {
         try {
             if (this.migrationsPath == null) return;
@@ -79,13 +84,13 @@ export default class SchemasHandler {
         upIndexs[0] = upIndexs[0] + upCommentLen;
         downIndexs[0] = downIndexs[0] + downCommentLen;
 
-        const up = sql.slice(...upIndexs);
-        const down = sql.slice(...downIndexs);
+        const up = this.normalizeSQL(sql.slice(...upIndexs)).trim();
+        const down = this.normalizeSQL(sql.slice(...downIndexs)).trim();
 
-        if (!up.trim()) throw new Error("The UP migration section is empty");
-        if (!down.trim()) throw new Error("The DOWN migration section is empty");
-
-        return { up: up.replace(/\n/g, ""), down: down.replace(/\n/g, "") };
+        if (!up) throw new Error("The UP migration section is empty");
+        if (!down) throw new Error("The DOWN migration section is empty");
+        
+        return { up, down };
     }
 
     makeMigrationFile(name: string) {
