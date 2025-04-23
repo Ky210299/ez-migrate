@@ -12,6 +12,8 @@ import Rollback from "./use-cases/Rollback";
 import Status from "./use-cases/Status";
 import Version from "./use-cases/Version";
 import Up from "./use-cases/Up";
+import MakeSeed from "./use-cases/MakeSeed";
+import Seed from "./use-cases/Seed";
 
 const program = new Command();
 
