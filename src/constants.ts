@@ -5,16 +5,16 @@ export const DEFAULT_MIGRATION_PATH = "./migrations";
 
 export const MIGRATIONS_DILALECTS = {
     MYSQL: "mysql",
-    sqlite: "sqlite",
+    SQLITE: "sqlite",
 } as const;
 
 export const TRACKER_DIALECTS = {
-    sqlite: "sqlite"
+    SQLITE: "sqlite"
 } as const
 
 export const DEFAULT_CONFIG: Config = {
     dialect: MIGRATIONS_DILALECTS.MYSQL,
-    trackerDialect: TRACKER_DIALECTS.sqlite,
+    trackerDialect: TRACKER_DIALECTS.SQLITE,
     migrationsPath: DEFAULT_MIGRATION_PATH,
     envKeys: {
         user: "DB_USER",
