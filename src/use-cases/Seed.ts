@@ -10,7 +10,6 @@ export default class Seed{
         const config = new ConfigReader().getConfig()
         const seedHandler = new SeedHandler(config);
         const seeds = seedHandler.getSeeds();
-        console.log(seeds)
         if (seeds.length === 0) throw new Error("Not seeds available");
         const connection = ConnectionFactory.create(config)
         const seedExecutor = new SeedExecutor(connection);

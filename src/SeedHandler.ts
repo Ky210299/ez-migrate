@@ -61,13 +61,14 @@ export default class SeedHandler {
     getSeeds() {
         const seedsFileNames = this.getSeedsFileNames(); 
         const withPath = this.addSeedsPathToSchemasName(seedsFileNames);
-        return withPath.flatMap(path => {
+        const sql = withPath.flatMap(path => {
             const sql = readFileSync(path, "utf8");
-            if (this.hasDDL(sql)) {
-                console.warn(`File ${path} has DDL statements`)
-                return [];
-            } else if (!sql.trim()) return []
+            if (!sql.trim()) return []
             return this.normalizeSQL(sql);
-        });
+        })
+        sql.forEach((query, i) => {
+            if (this.hasDDL(query)) throw new Error(`File ${withPath[i]} has DDL statements`)
+        })
+        return sql
     }
 }
