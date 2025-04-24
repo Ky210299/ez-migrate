@@ -21,7 +21,7 @@ export default class Migration {
     static getPreciseNow() {
         const now = new Date().toISOString().substring(0, 23);
         const ns = process.hrtime.bigint().valueOf() % BigInt(1e9); // Obtain the nanoseconds
-        return now.concat(`.${ns.toString().substring(3, 7)}`);
+        return now.concat(`.${ns.toString().substring(0, 8)}`);
     }
 
     constructor(data: Omit<MigrationData, "batchId" | "migratedAt"> & { batchId?: MigrationData["batchId"], migratedAt?: MigrationData["migratedAt"] }) {
