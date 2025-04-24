@@ -75,4 +75,8 @@ export default class MysqlConnection implements MySQLConnection {
             connection?.release();
         }
     }
+    
+    async close() {
+        await this.pool.end()
+    }
 }

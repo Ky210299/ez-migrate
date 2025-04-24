@@ -45,6 +45,6 @@ export default class Up {
         const migrationExecutor = new MigrationExecutor(connection, tracker);
         
         await migrationExecutor.executeSingleMigrationUp(nextMigration);
-        process.exit()
+        await migrationExecutor.close()
     }
 }

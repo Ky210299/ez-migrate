@@ -27,4 +27,8 @@ export default class SqliteConnection implements SqliteConnection {
     async runSQL(sql: string): Promise<any> {
         return this.db.prepare(sql).all();
     }
+    
+    async close() {
+        this.db.close();
+    }
 }

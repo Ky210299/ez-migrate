@@ -184,4 +184,7 @@ export default class SqlitePersistency implements Persistency {
             batchId: m.batch_id
         }))
     }
+    async close() {
+        this.db.close()
+    }
 }

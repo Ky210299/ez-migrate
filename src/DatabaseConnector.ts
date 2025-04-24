@@ -7,6 +7,8 @@ export interface Connection {
     runSQL: (sql: string) => Promise<any>;
     /** Initialize any necessary configuration of the DBMS before run the migrations */
     init: () => Promise<void>;
+    
+    close: () => Promise<void>;
 }
 
 /** Specific Mysql Connection interface */
@@ -52,6 +54,10 @@ class DatabaseConnector {
             console.error("Error connecting ", this.connection.DBMSName, ":\n\n");
             throw err;
         }
+    }
+    
+    async close() {
+        await this.connection.close();
     }
 }
 

@@ -26,6 +26,7 @@ export default class Status {
             else status.push(`✘ - ${name}`);
         }
         console.log(status.reverse())
+        await tracker.close()
     }
     
 }

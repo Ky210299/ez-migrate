@@ -15,5 +15,6 @@ export default class Seed{
         const connection = ConnectionFactory.create(config)
         const seedExecutor = new SeedExecutor(connection);
         await seedExecutor.execute(seeds)
+        await seedExecutor.close()
     }
 }
