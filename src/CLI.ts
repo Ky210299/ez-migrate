@@ -12,11 +12,22 @@ import Rollback from "./use-cases/Rollback";
 import Status from "./use-cases/Status";
 import Version from "./use-cases/Version";
 import Up from "./use-cases/Up";
+import MakeSeed from "./use-cases/MakeSeed";
+import Seed from "./use-cases/Seed";
 
 const program = new Command();
 
 program.name("ez-migrate").description("A simple migrations CLI tool").action(Migrate.run);
-program.command("make <name>").description("Create a new migration file").action(Make.run);
+program.command("make <name>")
+    .description("Create a new migration file")
+    .option("-s, --seed", "Create a seed file instead of a migration")
+    .action((name, options) => {
+        const { seed } = options
+        if (seed) {
+            MakeSeed.run(name) 
+        } else Make.run(name)
+    });
+program.command("seed").description("Run all seeds").action(Seed.run);
 program.command("down").description("Run down migration").action(Down.run);
 program.command("up").description("Run up migration").action(Up.run);
 program.command("init").description("Initialize migration setup").action(Init.run);

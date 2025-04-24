@@ -27,7 +27,7 @@ export default class ConnectionFactory {
                 })
                 return new DatabaseConnector(mysqlConnection)
             }
-            case MIGRATIONS_DILALECTS.sqlite: {
+            case MIGRATIONS_DILALECTS.SQLITE: {
                 const { sqlite } = config;
                 const sqliteConnection = new SqliteConnection(sqlite.trackerPath);
                 return new DatabaseConnector(sqliteConnection)
