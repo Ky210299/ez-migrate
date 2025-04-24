@@ -14,6 +14,7 @@ export default class Reset {
         if (migrationsDone.length) {
             const migrationExecutor = new MigrationExecutor(connection, tracker)
             await migrationExecutor.executeMigrationsDown(migrationsDone.reverse());
+            await migrationExecutor.close()
         }
         await Migrate.run();
     }

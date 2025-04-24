@@ -80,6 +80,14 @@ class MigrationExecutor {
             await rollback()
         }
     }
+    
+    /**
+     * Close the tracker and connection
+    */
+    async close() {
+        await this.dbconnector.close()
+        await this.tracker.close()
+    }
 }
 
 export default MigrationExecutor;

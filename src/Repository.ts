@@ -38,6 +38,8 @@ export interface Persistency {
     /** Return the last migration done if exists, null otherwise */
     getLastMigrationDone: () => Promise<Migration | null>;
     getLastBatchMigrationDone: () => Promise<Array<Migration> | null>
+    
+    close: () => Promise<void>
 }
 
 /** Repository for the migration tracker persistency */
@@ -79,4 +81,9 @@ export default class Repository {
     async getLastBatchMigrationDone(){
         return await this.persistency.getLastBatchMigrationDone();
     }
+    
+    async close() {
+        await this.persistency.close() 
+    }
+    
 }
