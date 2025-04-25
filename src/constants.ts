@@ -10,7 +10,8 @@ export const MIGRATIONS_DILALECTS = {
 } as const;
 
 export const TRACKER_DIALECTS = {
-    SQLITE: "sqlite"
+    SQLITE: "sqlite",
+    MYSQL: "mysql"
 } as const
 
 export const DEFAULT_CONFIG: Config = {
