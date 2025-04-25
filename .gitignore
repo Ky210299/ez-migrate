@@ -136,3 +136,6 @@ dist
 .pnp.*
 
 **.db
+**ez-migrate.json
+**.sql
+**.DS_Store
