@@ -9,10 +9,12 @@ export const ERRORS = {
     FILE_ALREADY_EXISTS: {
         errno: -17,
         message: "File already exists",
+        code: "EEXIST"
     },
     FILE_NOT_FOUND: {
         errno: -2,
         message: "File not found",
+        code: "ENOENT"
     },
 };
 export function isErrnoException(err: unknown) {

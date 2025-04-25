@@ -40,8 +40,8 @@ export default class SchemasHandler {
             mkdirSync(this.migrationsPath);
         } catch (err) {
             if (isErrnoException(err)) {
-                const { errno } = err;
-                if (errno === ERRORS.FILE_ALREADY_EXISTS.errno) return;
+                const { code } = err;
+                if (code === ERRORS.FILE_ALREADY_EXISTS.code) return;
             }
             throw err;
         }
