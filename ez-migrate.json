@@ -1,8 +1,0 @@
-{
-    "dialect": "mysql",
-    "trackerDialect": "sqlite",
-    "envKeys": {
-        "database": "DB",
-        "tracker": "XD"
-    }
-}
