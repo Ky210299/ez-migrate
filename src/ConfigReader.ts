@@ -25,6 +25,7 @@ export default class ConfigReader {
             return JSON.parse(json);
         } catch (err) {
             if (isErrnoException(err)) {
+                console.error("Error reading the config file: \nCheck if exist ez-migrate.json in your root");
                 throwMessage(err as NodeJS.ErrnoException);
             }
             console.error("Error reading the config file: \n", err);

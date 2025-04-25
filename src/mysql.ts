@@ -26,17 +26,17 @@ export default class MysqlConnection implements MySQLConnection {
             connectionLimit: 1,
         });
     }
-    async init() {
+    async init(migrationPath?: string) {
         try {
             await this.existsDatabase(this.pool, this.database ?? null)
-            console.log(`Using ${this.database} as database target for migration`)
+            console.log(`Using ${this.database} as database target for migration ${migrationPath ?? ""}`)
         } catch (err) {
-            console.warn("Not existing database.\nRunning migration whihout use any dabase")
+            console.warn(`Not existing database ${this.database}.
+Running migration ${migrationPath} whihout use any dabase`)
         }
     }
     async existsDatabase(pool: Pool, database: string | null) {
         const connection = await pool.getConnection();
-        console.log("Trying to use ", database);
         try {
             await connection.query(`USE ${database}`);
             return database

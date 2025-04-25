@@ -66,7 +66,6 @@ export default class SqlitePersistency implements Persistency {
         // when the migration is done successfuly (commit) or not (rollback)
         const commit: Commit = async () => {
             this.db.exec("COMMIT")
-            console.log("Commit tracker successfuly")
         };
         const rollback: Rollback = async () => {
             this.db.exec("ROLLBACK");
@@ -97,7 +96,6 @@ export default class SqlitePersistency implements Persistency {
         // when the migration is done successfuly (commit) or not (rollback)
         const commit: Commit = async () => {
             this.db.exec("COMMIT")
-            console.log("Commit tracker successfuly")
         };
         const rollback: Rollback = async () => {
             this.db.exec("ROLLBACK");
@@ -137,7 +135,6 @@ export default class SqlitePersistency implements Persistency {
         // when the migration is done successfuly (commit) or not (rollback)
         const commit: Commit = async () => {
             this.db.exec("COMMIT")
-            console.log("Commit tracker successfuly")
         };
         const rollback: Rollback = async () => {
             this.db.exec("ROLLBACK");

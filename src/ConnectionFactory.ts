@@ -17,14 +17,19 @@ export default class ConnectionFactory {
                 try { process.loadEnvFile() } 
                 catch (err) { console.warn("Environment not loaded. Using default configurations") }
                 const { env: ENV } = process;
-                        
-                const mysqlConnection = new MysqlConnection({ 
+                console.log('\n')
+                const connectionData = { 
                     host: ENV[envKeys.host],
                     user: ENV[envKeys.user], 
                     password: ENV[envKeys.password],
                     port: Number(ENV[envKeys.port]),
                     database: ENV[envKeys.database],
-                })
+                }
+                const { host, user, password, port, database } = connectionData;
+                if (!connectionData.database) console.warn("Database name is not especified");
+                else if (!connectionData.password) console.warn("Password is not especified")
+                const mysqlConnection = new MysqlConnection({ host, user, password, port, database, })
+                console.log('\n')
                 return new DatabaseConnector(mysqlConnection)
             }
             case MIGRATIONS_DILALECTS.SQLITE: {

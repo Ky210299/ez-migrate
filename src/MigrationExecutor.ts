@@ -38,10 +38,10 @@ class MigrationExecutor {
     };
     async executeMigrationsUp(migrations: Array<Migration>) {
         await this.dbconnector.testConnection();
-        await this.dbconnector.initConnection();
         // DDL is not transactional and autocommit after each statement, so we need to track every migration separately
         for (const m of migrations) {
             const migrationData = m.getDetails();
+            await this.dbconnector.initConnection(migrationData.path);
             const { commit, rollback } = await this.tracker.save([migrationData]);
             try {
                 await this.dbconnector.runSQL(migrationData.up);
