@@ -14,9 +14,6 @@ export default class TrackerFactory {
     }
     static create(config: Config) {
         const { trackerDialect, envKeys } = config;
-        if (Object.values(TRACKER_DIALECTS).includes(trackerDialect) === false) {
-            throw new Error("Invalid Tracker Dialect")
-        }
         
         switch (trackerDialect) {
             case TRACKER_DIALECTS.SQLITE: {

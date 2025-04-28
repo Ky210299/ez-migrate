@@ -1,6 +1,6 @@
 import { Pool, createPool, PoolOptions } from "mysql2/promise";
 
-import { Persistency, TRACKER_SCHEMA, Commit, Rollback, TABLE_NAME } from "./Repository.js";
+import { Persistency, TRACKER_SCHEMA, Commit, Rollback, TABLE_NAME, EXPECTED_SCHEMA } from "./Repository.js";
 import Migration, { MigrationData } from "./Migration.js";
 
 type DBMigrationData =
@@ -10,6 +10,9 @@ type DBMigrationData =
 
 export default class MysqlTracker implements Persistency{
     private readonly MIGRATION_TABLE = TABLE_NAME;
+    private readonly COMPARE_SQL = `
+        SHOW COLUMNS FROM ${this.MIGRATION_TABLE}
+      `
     private readonly MIGRATION_COLUMNS = {
         BATCH_ID: "batch_id",
         MIGRATED_AT: "migrated_at",
@@ -45,19 +48,39 @@ export default class MysqlTracker implements Persistency{
     }
 
     private async checkSchema() {
+        let connection;
         try {
-            await this.db.query(`USE ${this.database}`)
+            connection = await this.db.getConnection()
+            await connection.query(`USE ${this.database}`)
         } catch (err) {
-            await this.db.query(`CREATE DATABASE ${this.database}`)
+            await connection?.query(`
+                CREATE DATABASE ${this.database};
+                USE ${this.database};
+                ${TRACKER_SCHEMA}`)
+        } finally {
+            const [result] = await connection?.query(this.COMPARE_SQL) as unknown as [{
+                Field: string
+                Type: string
+                Null: string
+                Key: string
+                Default: string | null
+                Extra: string
+            }[]];
+            for (const column of EXPECTED_SCHEMA) {
+                const checkedColum = result.find(col => col.Field === column.name)
+                if (checkedColum == null) throw new Error("Wrong tracker schema")
+                if (
+                    column.name !== checkedColum.Field ||
+                        column.type !== checkedColum.Type.toUpperCase() ||
+                        column.nullable !== (checkedColum.Null !== "NO") ||
+                        column.primary !== (checkedColum.Key === "PRI") ||
+                        column.name === "path" ? column.unique === (checkedColum.Key !== "UNI") : false
+                ) throw new Error(
+                    `Invalid Schema. Needed: ${TRACKER_SCHEMA}`,
+                );
+            }
+            connection?.release()
         }
-        const [schema] = await this.db.query(`DESCRIBE ${this.database}.${this.MIGRATION_TABLE}`)
-        console.log(schema)
-        // if (currentSchema == null) this.db.exec(TRACKER_SCHEMA);
-        // else if (currentSchema.sql !== TRACKER_SCHEMA) {
-        //     throw new Error(
-        //         `Invalid Schema:\ncurrent: ${currentSchema.sql}\nvs\nneeded: ${TRACKER_SCHEMA}`,
-        //     );
-        // }
     }
     async save(migrations: Array<MigrationData>) {
         await this.db.beginTransaction();
