@@ -7,13 +7,51 @@ export const TABLE_NAME = "ez_migration";
 export const TRACKER_SCHEMA = `
     CREATE TABLE ${TABLE_NAME} (
         batch_id CHAR(36),
-        migrated_at DATETIME UNIQUE NOT NULL,
+        migrated_at CHAR(32) UNIQUE NOT NULL,
         up TEXT NOT NULL,
         down TEXT NOT NULL,
         path VARCHAR(255) NOT NULL UNIQUE,
         PRIMARY KEY (batch_id, migrated_at)
     )
     `.trim();
+export const EXPECTED_SCHEMA = [
+    { 
+        name: 'batch_id',
+        type: 'CHAR(36)',
+        nullable: false,
+        primary: true,
+        unique: false
+    },
+    { 
+        name: 'migrated_at',
+        type: 'CHAR(32)',
+        nullable: false,
+        primary: true,
+        unique: true
+    },
+    { 
+        name: 'up',
+        type: 'TEXT',
+        nullable: false,
+        primary: false,
+        unique: false
+    },
+    { 
+        name: 'down',
+        type: 'TEXT',
+        nullable: false,
+        primary: false,
+        unique: false
+    },
+    { 
+        name: 'path',
+        type: 'VARCHAR(255)',
+        nullable: false,
+        primary: false,
+        unique: true
+    },
+];
+
 /** Commit is a async function that does a commit to a started transaction */
 export type Commit = () => Promise<void>;
 /** Rollback is a async function that does a rollback to a started transaction */
