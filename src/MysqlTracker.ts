@@ -84,14 +84,15 @@ export default class MysqlTracker implements Persistency{
         }
     }
     async save(migrations: Array<MigrationData>) {
-        await this.db.beginTransaction();
+        const connection = await this.db.getConnection();
+        await connection.beginTransaction();
         const columns = Object.values(this.MIGRATION_COLUMNS);
 
         const placeholders = new Array(migrations.length)
             .fill("(" + new Array(columns.length).fill("?").join(",") + ")")
             .join(",");
 
-        const insert = await this.db.prepare(`
+        const insert = await connection.prepare(`
             INSERT INTO ${this.MIGRATION_TABLE} (${columns.join(",")})
             VALUES ${placeholders}
             `);
@@ -105,11 +106,13 @@ export default class MysqlTracker implements Persistency{
         // Returns commit or rollback function that will be used
         // when the migration is done successfuly (commit) or not (rollback)
         const commit: Commit = async () => {
-            await this.db.commit()
+            await connection.commit();
+            connection.release();
         };
         const rollback: Rollback = async () => {
-            await this.db.rollback()
-            console.warn("Rollback successfuly")
+            await connection.rollback();
+            console.warn("Rollback successfuly");
+            connection.release();
         }
 
         try {
@@ -123,23 +126,26 @@ export default class MysqlTracker implements Persistency{
     };
 
     async removeMigrations(migrations: Array<MigrationData>) {
-        await this.db.beginTransaction();
+        const connection = await this.db.getConnection();
+        await connection.beginTransaction();
         const placeholders = new Array(migrations.length).fill("?").join(",")
         const values = migrations.map(m => m.migratedAt);
         const sql = `
                 DELETE FROM ${TABLE_NAME} WHERE
                 ${this.MIGRATION_COLUMNS.MIGRATED_AT} IN (${placeholders})
         `
-        const q = await this.db.prepare(sql)
+        const q = await connection.prepare(sql)
         
         // Returns commit or rollback function that will be used
         // when the migration is done successfuly (commit) or not (rollback)
         const commit: Commit = async () => {
-            await this.db.commit()
+            await connection.commit()
+            connection.release()
         };
         const rollback: Rollback = async () => {
-            await this.db.rollback();
+            await connection.rollback();
             console.warn("Rollback tracker successfuly")
+            connection.release()
         }
 
         try {
@@ -152,24 +158,25 @@ export default class MysqlTracker implements Persistency{
         }
     };
     async removeMigration(migration: MigrationData) {
-        await this.db.beginTransaction();
+        const connection = await this.db.getConnection();
+        await connection.beginTransaction();
         const sql = `
                 DELETE FROM ${TABLE_NAME} WHERE
                 ${this.MIGRATION_COLUMNS.MIGRATED_AT} = ?
         `
-        const q = await this.db.prepare(sql)
+        const q = await connection.prepare(sql)
 
         // Returns commit or rollback function that will be used
         // when the migration is done successfuly (commit) or not (rollback)
         const commit: Commit = async () => {
-            await this.db.commit()
+            await connection.commit()
         };
         const rollback: Rollback = async () => {
-            await this.db.rollback()
+            await connection.rollback()
             console.warn("Rollback tracker successfuly")
         }
         try {
-            await q.execute(migration.migratedAt);
+            await q.execute([migration.migratedAt]);
         } catch (err) {
             console.error(err);
             throw new Error("Error tracking the migration")
@@ -178,10 +185,12 @@ export default class MysqlTracker implements Persistency{
         }
     };
     async list(): Promise<Array<Migration>> {
-        const query = await this.db.prepare(`
+        const connection = await this.db.getConnection();
+        const query = await connection.prepare(`
             SELECT * FROM ${this.MIGRATION_TABLE};
             `);
         const [migrations] = await query.execute([]) as unknown as [Array<DBMigrationData>];
+        connection.release();
         return migrations.map(m => new Migration({
             ...m,
             batchId: m.batch_id,
@@ -190,19 +199,22 @@ export default class MysqlTracker implements Persistency{
     };
 
     async getLastMigrationDone() {
-        const query = await this.db.prepare(`
+        const connection = await this.db.getConnection();
+        const query = await connection.prepare(`
                 SELECT * FROM ${TABLE_NAME} 
                 ORDER BY ${this.MIGRATION_COLUMNS.MIGRATED_AT} DESC LIMIT 1
             `);
-        const [migrationData] = await query.execute([]) as unknown as [DBMigrationData]
-        return migrationData != null ? new Migration({
-            ...migrationData,
-            migratedAt: migrationData.migrated_at,
-            batchId: migrationData.batch_id
+        const [migrationData] = await query.execute([]) as unknown as [DBMigrationData[]]
+        connection.release();
+        return migrationData.length > 0 ? new Migration({
+            ...migrationData[0],
+            migratedAt: migrationData[0].migrated_at,
+            batchId: migrationData[0].batch_id
         }) : null;
     };
     async getLastBatchMigrationDone(): Promise<Array<Migration> | null>{
-        const query = await this.db.prepare(`
+        const connection = await this.db.getConnection();
+        const query = await connection.prepare(`
                 SELECT * FROM ${TABLE_NAME}
                 WHERE ${this.MIGRATION_COLUMNS.BATCH_ID} = (
                     SELECT ${this.MIGRATION_COLUMNS.BATCH_ID} FROM ${TABLE_NAME} 
@@ -213,6 +225,7 @@ export default class MysqlTracker implements Persistency{
         const [migrationsData] = await query.execute([]) as unknown as [DBMigrationData[]]
         if (migrationsData.length === 0) return null;
         
+        connection.release();
         return migrationsData.map(m => new Migration({
             ...m,
             migratedAt: m.migrated_at,
