@@ -7,7 +7,7 @@ export const TABLE_NAME = "ez_migration";
 export const TRACKER_SCHEMA = `
     CREATE TABLE ${TABLE_NAME} (
         batch_id CHAR(36),
-        migrated_at DATETIME UNIQUE NOT NULL,
+        migrated_at CHAR(32) UNIQUE NOT NULL,
         up TEXT NOT NULL,
         down TEXT NOT NULL,
         path VARCHAR(255) NOT NULL UNIQUE,
@@ -24,7 +24,7 @@ export const EXPECTED_SCHEMA = [
     },
     { 
         name: 'migrated_at',
-        type: 'DATETIME',
+        type: 'CHAR(32)',
         nullable: false,
         primary: true,
         unique: true
