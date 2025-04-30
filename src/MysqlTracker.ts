@@ -12,7 +12,8 @@ export default class MysqlTracker implements Persistency{
     private readonly MIGRATION_TABLE = TABLE_NAME;
     private readonly COMPARE_SQL = `
         SHOW COLUMNS FROM ${this.MIGRATION_TABLE}
-      `
+      `;
+    private readonly MIGRATION_DATABASE = "ez_migration";
     private readonly MIGRATION_COLUMNS = {
         BATCH_ID: "batch_id",
         MIGRATED_AT: "migrated_at",
@@ -29,12 +30,12 @@ export default class MysqlTracker implements Persistency{
     readonly port: string | number;
     private readonly db: Pool;
 
-    constructor({ user, password, port, database, host }: PoolOptions) {
+    constructor({ user, password, port, host }: PoolOptions) {
         this.host = host ?? "localhost";
         this.user = user ?? "root";
         this.password = password ?? "";
         this.port = port ?? 3306;
-        this.database = database;
+        this.database = this.MIGRATION_DATABASE;
         
         this.db = createPool({
             host: this.host,
