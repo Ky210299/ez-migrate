@@ -16,7 +16,7 @@ export const TRACKER_DIALECTS = {
 
 export const DEFAULT_CONFIG: Config = {
     dialect: MIGRATIONS_DILALECTS.MYSQL,
-    trackerDialect: TRACKER_DIALECTS.SQLITE,
+    trackerDialect: TRACKER_DIALECTS.MYSQL,
     migrationsPath: DEFAULT_MIGRATION_PATH,
     seedsPath: DEFAULT_SEEDS_PATH,
     envKeys: {
