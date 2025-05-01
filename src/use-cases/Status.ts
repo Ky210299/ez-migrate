@@ -5,7 +5,7 @@ import TrackerFactory from "../TrackerFactory";
 export default class Status {
     public static async run() {
         const config = new ConfigReader().getConfig();
-        const schemaHandler = new SchemasHandler(config.migrationsPath);
+        const schemaHandler = new SchemasHandler({ migrationsPath: config.migrationsPath });
         const allMigrations = schemaHandler.getAllMigrations().map(m => schemaHandler.makeMigrationFromFile(m));
         const tracker = TrackerFactory.create(config);
         const allMigrationsDone = await tracker.listMigrations();
