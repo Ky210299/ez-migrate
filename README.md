@@ -42,22 +42,36 @@ Initialize a minimal config file in your project root:
 ez-migrate init [path]
 ```
 
-Generates `ez-migrate.json` with defaults:
+# 🛠️ `ez-migrate.config.json` — Configuration File
+
+This file defines how database migrations and seeds are managed and executed.
+
+---
+
+## 🔹 `dialect`
+The database type where migrations will be applied.
+**Possible values:** `"mysql"`, `"sqlite"` (others may be added in the future).
+
+## 🔹 `migrationsPath`
+Path to the directory where sql migration files are stored.
+**Example:** `"./migrations"`
+
+## 🔹 `seedsPath`
+Path to the directory where sql seed files are stored.
+**Example:** `"./seeds"`
+
+---
+
+## 🔸 `envKeys`
+Specifies the environment variable names used to connect to the **main** database.
 
 ```json
 {
-  "dialect": "mysql",
-  "trackerDialect": "sqlite",
-  "migrationsPath": "./migrations",
-  "seedsPath": "./seeds",
-  "envKeys": {
-    "user": "DB_USER",
-    "password": "DB_PASSWORD",
-    "port": "DB_PORT",
-    "host": "DB_HOST",
-    "database": "DB_NAME"
-  },
-  "sqlite": { "trackerPath": "./migrations" }
+  "user": "DB_USER",         // Database user
+  "password": "DB_PASSWORD", // Database password
+  "port": "DB_PORT",         // Database port
+  "host": "DB_HOST",         // Database host
+  "database": "DB_NAME"      // Database name
 }
 ```
 
@@ -71,36 +85,36 @@ Set your environment variables (`DB_HOST`, `DB_USER`, etc.) before running comma
 ez-migrate <command> [options]
 ```
 
-- \*\*make\*\*\
+- **make**
   Create a new migration file in `migrations/`.
 
   - `-s, --seed`: create a seed file in `seeds/` instead.
 
-- **seed**\
+- **seed**
   Execute all SQL seed files in order.
 
-- **init [path]**\
+- **init [path]**
   Generate config, migrations and seeds folders (if missing).
 
-- **status**\
+- **status**
   Display applied vs pending migrations.
 
-- **migrate**\
+- **migrate**
   Apply all pending migrations.
 
-- **up**\
+- **up**
   Run the next pending migration.
 
-- **down**\
+- **down**
   Roll back the most recent migration.
 
-- **rollback**\
+- **rollback**
   Revert the last batch of migrations.
 
-- **reset**\
+- **reset**
   Roll back all migrations to zero.
 
-- **redo**\
+- **redo**
   Undo and reapply the last migration.
 
 
@@ -112,7 +126,7 @@ ez-migrate <command> [options]
 ez-migrate make add_users_table
 
 # Create a new seed
-ez-migrate make populate_demo_data --seed
+ez-migrate make --seed populate_demo_data
 
 # Apply pending migrations
 ez-migrate migrate
@@ -123,4 +137,3 @@ ez-migrate rollback
 # Check current status
 ez-migrate status
 ```
-
