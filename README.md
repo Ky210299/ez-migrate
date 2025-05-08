@@ -1,4 +1,4 @@
-# @ky210299/ez-migrate v1.0.0
+# @ky210299/ez-migrate
 
 A lightweight CLI for database migrations and SQL seeds—designed for simplicity, speed, and reliability.  
 Perfect for small-to-medium projects that need an easy, zero-boilerplate way to version your schema and seed data.
