@@ -1,0 +1,17 @@
+src/
+*.ts
+*.d.ts
+
+.eslintrc*
+eslint.config.*
+tsconfig.json
+pnpm-lock.yaml
+
+*.log
+.vscode/
+.env
+tests/
+migrations/
+
+dist/**/*.map
+
