@@ -1,4 +1,5 @@
 src/
+ez-migrate.json
 *.ts
 *.d.ts
 

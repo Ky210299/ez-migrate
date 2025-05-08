@@ -1,5 +1,5 @@
 {
-    "name": "@lbm/ez-migrate",
+    "name": "@ky210299/ez-migrate",
     "version": "0.1.0",
     "description": "A easy library for make SQL migrations",
     "main": "dist/ez-migrate.js",
