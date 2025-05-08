@@ -1,9 +1,9 @@
 {
     "name": "@ky210299/ez-migrate",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "description": "A easy library for make SQL migrations",
     "main": "dist/ez-migrate.js",
-    "publishConfig":{
+    "publishConfig": {
         "access": "public"
     },
     "scripts": {
