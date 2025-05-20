@@ -1,4 +1,6 @@
 import ConfigReader from "../ConfigReader";
+import { ConsoleLoggerImpl } from "../Logger";
+import { PinoConsoleLogger } from "../PinoLogger";
 import SchemasHandler from "../SchemasHandler";
 import TrackerFactory from "../TrackerFactory";
 
@@ -9,6 +11,9 @@ export default class Status {
         const allMigrations = schemaHandler.getAllMigrations().map(m => schemaHandler.makeMigrationFromFile(m));
         const tracker = TrackerFactory.create(config);
         const allMigrationsDone = await tracker.listMigrations();
+        
+        const pino = new PinoConsoleLogger()
+        const logger = new ConsoleLoggerImpl(pino)
         
         const status = new Array(Math.max(allMigrations.length, allMigrationsDone.length))
         
@@ -25,7 +30,7 @@ export default class Status {
             else if (isDone) status.push(`✔ - ${name}`)
             else status.push(`✘ - ${name}`);
         }
-        console.log(status.reverse())
+        logger.info("\n" + (status.reverse()).join("\n").trim());
         await tracker.close()
     }
     
