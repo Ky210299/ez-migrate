@@ -1,3 +1,4 @@
+import { consoleLogger } from "./Logger";
 export class MigrateError extends Error {
     constructor(msg: string, name: string | undefined = undefined) {
         super(msg);
@@ -24,5 +25,5 @@ export function isErrnoException(err: unknown) {
 export function throwMessage(err: NodeJS.ErrnoException) {
     const { errno } = err;
     const message = Object.values(ERRORS).find((err) => err.errno === errno)?.message;
-    if (message != null) throw new Error(message);
+    if (message != null) consoleLogger.error(message);
 }

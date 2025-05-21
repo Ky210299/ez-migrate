@@ -1,3 +1,5 @@
+import { ConsoleLoggerImpl } from "./Logger";
+
 /** Represent a database connection where migrations will be made */
 export interface Connection {
     /** The Database Managment System name of the connection */
@@ -6,7 +8,7 @@ export interface Connection {
     isConnected: () => Promise<boolean>;
     runSQL: (sql: string) => Promise<any>;
     /** Initialize any necessary configuration of the DBMS before run the migrations */
-    init: (migrationPath?: string) => Promise<void>;
+    init: (migrationPath?: string, migrationDirection?: string) => Promise<void>;
     
     close: () => Promise<void>;
 }
@@ -29,8 +31,10 @@ type DatabaseConnection = MySQLConnection | SqliteConnection;
 /** Class that use a DatabaseConnection */
 class DatabaseConnector {
     readonly connection: DatabaseConnection;
-    constructor(connection: DatabaseConnection) {
+    readonly consoleLogger: ConsoleLoggerImpl
+    constructor(connection: DatabaseConnection, { logger: consoleLogger }: { logger: ConsoleLoggerImpl }) {
         this.connection = connection
+        this.consoleLogger = consoleLogger
     }
     /** Run the sql into the DBMS */
     async runSQL(sql: string): Promise<void> {
@@ -40,8 +44,8 @@ class DatabaseConnector {
     /** Initialize any necessary configuration of the DBMS before run the migrations.
         You must always call this before running the migration
     */
-    async initConnection(migrationPath?: string) {
-        await this.connection.init(migrationPath);
+    async initConnection(migrationPath?: string, migrationDirection?: string) {
+        await this.connection.init(migrationPath, migrationDirection);
     }
     
     /** A method that returns true whether can connect to the DBMS, false otherwise */
@@ -49,8 +53,9 @@ class DatabaseConnector {
         try {
             await this.connection.isConnected();
         } catch (err) {
-            console.error("Error connecting ", this.connection.DBMSName, ":\n\n");
-            throw err;
+            this.consoleLogger.error(`Error connecting ${this.connection.DBMSName}: 
+                ${err}`);
+            throw ""
         }
     }
     

@@ -4,9 +4,11 @@ import SchemasHandler from "../SchemasHandler";
 import ConnectionFactory from "../ConnectionFactory";
 import TrackerFactory from "../TrackerFactory";
 import Repository from "../Repository";
+import { consoleLogger } from "../Logger";
 
 /** Class for running the Up use case */
 export default class Up {
+    static consoleLogger = consoleLogger
     /** returns the next Migration available next to the last done. If not last migration done,
      * use the first migration file, throw otherwise.
     */
@@ -15,8 +17,7 @@ export default class Up {
         if (lastMigration == null) {
             const firstMigrationFile = schemaHandler.getAllMigrations().at(0);
             
-            if (firstMigrationFile == null) 
-                throw new Error("There is not next migration available");
+            if (firstMigrationFile == null) return null
                 
             return schemaHandler.makeMigrationFromFile(firstMigrationFile);
         }
@@ -35,10 +36,16 @@ export default class Up {
         const schemaHandler = new SchemasHandler({ migrationsPath });
         const nextMigration = await Up.getNextMigration(schemaHandler, tracker);
         
-        if (!nextMigration) throw new Error("There is not a next migration available");
+        if (!nextMigration) {
+            Up.consoleLogger.info("There is not a next migration available");
+            await tracker.close();
+            return
+        }
         else if (schemaHandler.hasDML(nextMigration.getDetails().up)) {
-            throw new Error(`Migration file with DML: ${nextMigration.getDetails().path}
-                Migrations files cannot have DML statements. Use Seeds instead`)
+            Up.consoleLogger.error(`Migration file with DML: ${nextMigration.getDetails().path}
+                Migrations files cannot have DML statements. Use Seeds instead`);
+            await tracker.close();
+            return
         }
         
         const connection = ConnectionFactory.create(config);

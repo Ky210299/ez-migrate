@@ -3,9 +3,8 @@ import Repository from "./Repository";
 
 import SqlitePersistency from "./SqlitePersistency";
 import MysqlTracker from "./MysqlTracker";
-
-
 import { Config } from "./types";
+import { consoleLogger } from "./Logger";
 
 /** Create a tracker for the migrations. By default use sqlite */
 export default class TrackerFactory {
@@ -23,9 +22,8 @@ export default class TrackerFactory {
             };
             case TRACKER_DIALECTS.MYSQL: {
                 try { process.loadEnvFile() } 
-                catch (err) { console.warn("Environment not loaded. Using default configurations") }
+                catch (err) { consoleLogger.warn("Environment not loaded. Using default configurations") }
                 const { env: ENV } = process;
-                console.log('\n')
                 const connectionData = { 
                     host: ENV[envKeys.host],
                     user: ENV[envKeys.user], 
@@ -34,14 +32,12 @@ export default class TrackerFactory {
                     database: ENV[envKeys.database],
                 }
                 const { host, user, password, port, database } = connectionData;
-                if (!connectionData.database) console.warn("Database name is not especified");
-                else if (!connectionData.password) console.warn("Password is not especified")
                 const mysqlConnection = new MysqlTracker({ host, user, password, port, database, })
-                console.log('\n')
                 return new Repository(mysqlConnection)
             }
             default: {
-                throw new Error("Invalid Tracker dialect")
+                consoleLogger.error("Invalid Tracker dialect")
+                process.exit(1)
             }
         }
     }

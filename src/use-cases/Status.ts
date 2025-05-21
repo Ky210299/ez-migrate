@@ -1,8 +1,10 @@
 import ConfigReader from "../ConfigReader";
 import SchemasHandler from "../SchemasHandler";
 import TrackerFactory from "../TrackerFactory";
+import { consoleLogger } from "../Logger";
 
 export default class Status {
+    static consoleLogger = consoleLogger;
     public static async run() {
         const config = new ConfigReader().getConfig();
         const schemaHandler = new SchemasHandler({ migrationsPath: config.migrationsPath });
@@ -10,7 +12,8 @@ export default class Status {
         const tracker = TrackerFactory.create(config);
         const allMigrationsDone = await tracker.listMigrations();
         
-        const status = new Array(Math.max(allMigrations.length, allMigrationsDone.length))
+        
+        const status = []
         
         for (const migration of allMigrations) {
             const { path, up } = migration.getDetails()
@@ -25,7 +28,11 @@ export default class Status {
             else if (isDone) status.push(`✔ - ${name}`)
             else status.push(`✘ - ${name}`);
         }
-        console.log(status.reverse())
+        Status.consoleLogger.info("\n" + (status
+            .reverse()
+            .map((s, i) => `${Math.abs(i - status.length)} ${s.replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+\.\d+-/, "")}`))
+            .join("\n")
+            .trim());
         await tracker.close()
     }
     
