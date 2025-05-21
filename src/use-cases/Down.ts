@@ -18,8 +18,9 @@ export default class Down {
         
         const lastMigration = await tracker.getLastMigrationDone();
         if (lastMigration == null) {
-            logger.warn("There is not migrations done")
-            return;
+            logger.info("There is not migrations done")
+            await tracker.close()
+            process.exit(1)
         };
         
         const connection = ConnectionFactory.create(config);

@@ -1,3 +1,5 @@
+import { ConsoleLoggerImpl } from "./Logger";
+
 /** Represent a database connection where migrations will be made */
 export interface Connection {
     /** The Database Managment System name of the connection */
@@ -29,8 +31,10 @@ type DatabaseConnection = MySQLConnection | SqliteConnection;
 /** Class that use a DatabaseConnection */
 class DatabaseConnector {
     readonly connection: DatabaseConnection;
-    constructor(connection: DatabaseConnection) {
+    readonly consoleLogger: ConsoleLoggerImpl
+    constructor(connection: DatabaseConnection, { logger: consoleLogger }: { logger: ConsoleLoggerImpl }) {
         this.connection = connection
+        this.consoleLogger = consoleLogger
     }
     /** Run the sql into the DBMS */
     async runSQL(sql: string): Promise<void> {
@@ -49,8 +53,9 @@ class DatabaseConnector {
         try {
             await this.connection.isConnected();
         } catch (err) {
-            console.error("Error connecting ", this.connection.DBMSName, ":\n\n");
-            throw err;
+            this.consoleLogger.error(`Error connecting ${this.connection.DBMSName}: 
+                ${err}`);
+            throw ""
         }
     }
     

@@ -1,6 +1,7 @@
 import { createPool } from "mysql2/promise";
 import type { PoolOptions, Pool } from "mysql2/promise";
 import { MySQLConnection } from "./DatabaseConnector.js";
+import { ConsoleLoggerImpl } from "./Logger.js";
 
 export default class MysqlConnection implements MySQLConnection {
     private readonly pool: Pool;
@@ -10,12 +11,14 @@ export default class MysqlConnection implements MySQLConnection {
     readonly password: string | undefined;
     readonly database: string | undefined;
     readonly port: string | number;
-    constructor({ user, password, port, database, host }: PoolOptions) {
+    readonly logger: ConsoleLoggerImpl;
+    constructor({ user, password, port, database, host, logger }: PoolOptions & { logger: ConsoleLoggerImpl }) {
         this.host = host ?? "localhost";
         this.user = user ?? "root";
         this.password = password ?? "";
         this.port = port ?? 3306;
         this.database = database;
+        this.logger = logger
         
         this.pool = createPool({
             host: this.host,
@@ -29,10 +32,10 @@ export default class MysqlConnection implements MySQLConnection {
     async init(migrationPath?: string) {
         try {
             await this.existsDatabase(this.pool, this.database ?? null)
-            console.log(`Using ${this.database} as database target for migration ${migrationPath ?? ""}`)
+            this.logger.info(`Using ${this.database} as database target for migration ${migrationPath ?? ""}`)
         } catch (err) {
-            console.warn(`Non-existing database ${this.database}.
-Running migration ${migrationPath?.concat(" ") ?? ""}whihout use any database`)
+            this.logger.warn(`Non-existing database ${this.database}`);
+            this.logger.warn(`Running migration ${migrationPath?.concat(" ") ?? ""}whihout use any database`);
         }
     }
     async existsDatabase(pool: Pool, database: string | null) {
@@ -70,7 +73,7 @@ Running migration ${migrationPath?.concat(" ") ?? ""}whihout use any database`)
             await connection.commit();
             return result;
         } catch (err) {
-            console.error("MySQL error doing migration:\n", err);
+            this.logger.error(`MySQL error doing migration:\n${err}`);
             await connection?.rollback();
             throw err
         } finally {
