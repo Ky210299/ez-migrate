@@ -13,16 +13,12 @@ export default class TrackerFactory {
         throw new Error("PersistencyFactory is a static class. Not constructor allow");
     }
     static create(config: Config) {
-        const { trackerDialect, envKeys } = config;
-        if (Object.values(TRACKER_DIALECTS).includes(trackerDialect) === false) {
-            throw new Error("Invalid Tracker Dialect")
-        }
+        const { dialect, envKeys } = config.tracker;
         
-        switch (trackerDialect) {
+        switch (dialect) {
             case TRACKER_DIALECTS.SQLITE: {
-                const { sqlite } = config;
-                const { trackerPath } = sqlite
-                const sqlitePersistency = new SqlitePersistency({ trackerPath })
+                const { sqlitePath } = config.tracker;
+                const sqlitePersistency = new SqlitePersistency({ trackerPath: sqlitePath })
                 return new Repository(sqlitePersistency);
             };
             case TRACKER_DIALECTS.MYSQL: {

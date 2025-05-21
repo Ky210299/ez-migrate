@@ -32,7 +32,7 @@ export default class MysqlConnection implements MySQLConnection {
             console.log(`Using ${this.database} as database target for migration ${migrationPath ?? ""}`)
         } catch (err) {
             console.warn(`Not existing database ${this.database}.
-Running migration ${migrationPath} whihout use any dabase`)
+Running migration ${migrationPath?.concat(" ") ?? ""}whihout use any database`)
         }
     }
     async existsDatabase(pool: Pool, database: string | null) {

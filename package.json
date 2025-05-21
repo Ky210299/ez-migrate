@@ -1,22 +1,22 @@
 {
-    "name": "ez-migrate",
-    "version": "0.0.1",
+    "name": "@ky210299/ez-migrate",
+    "version": "0.1.2",
     "description": "A easy library for make SQL migrations",
     "main": "dist/ez-migrate.js",
+    "bin": {
+        "ez-migrate": "dist/ez-migrate.js"
+    },
+    "publishConfig": {
+        "access": "public"
+    },
     "scripts": {
         "test": "echo \"Error: no test specified\" && exit 1",
-        "build": "pnpm exec tsc",
-        "migrate": "node --run build && node --experimental-sqlite dist/ez-migrate.js",
-        "migrate:up": "node --run build && node --experimental-sqlite dist/ez-migrate.js up",
-        "migrate:down": "node --run build && node --experimental-sqlite dist/ez-migrate.js down",
-        "migrate:make": "node --run build && node --experimental-sqlite dist/ez-migrate.js make ",
-        "migrate:rollback": "node --run build && node --experimental-sqlite dist/ez-migrate.js rollback",
-        "migrate:reset": "node --run build && node --experimental-sqlite dist/ez-migrate.js reset",
-        "migrate:status": "node --run build && node --experimental-sqlite dist/ez-migrate.js status"
+        "build": "pnpm exec tsc"
     },
     "keywords": [
         "migrations",
-        "SQL"
+        "SQL",
+        "databases"
     ],
     "author": "Leonardo Bazán Márquez",
     "license": "ISC",

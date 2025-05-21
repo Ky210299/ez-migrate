@@ -1,14 +1,26 @@
 # @ky210299/ez-migrate
 
-A lightweight CLI for database migrations and SQL seeds—designed for simplicity, speed, and reliability.
+A lightweight CLI for database migrations and SQL seeds—designed for simplicity, speed, and reliability.  
+Perfect for small-to-medium projects that need an easy, zero-boilerplate way to version your schema and seed data.
 
-**What makes it unique?**
+---
 
-- **Unified workflow:** manage both migrations and data seeds with one tool.
+## 📑 Table of Contents
 
-- **Zero boilerplate:** generates timestamp-based SQL files out of the box.
-
-
+1. [Installation](#installation)  
+2. [Usage](#usage)  
+3. [Configuration](#configuration)  
+   - [ez-migrate.config.json](#ez-migrateconfigjson)  
+   - [dialect](#dialect)  
+   - [migrationsPath](#migrationspath)  
+   - [seedsPath](#seedspath)  
+   - [envKeys](#envkeys)  
+   - [tracker](#tracker)  
+4. [Commands](#commands)  
+5. [Examples](#examples)  
+6. [Environment Variables](#environment-variables)  
+7. [Contributing](#contributing)  
+8. [Author](#author)  
 
 ---
 
@@ -34,7 +46,7 @@ npx @ky210299/ez-migrate <command> [options]
 
 ---
 
-## ⚙️ Configuration
+## 🔧 Usage
 
 Initialize a minimal config file in your project root:
 
@@ -42,26 +54,57 @@ Initialize a minimal config file in your project root:
 ez-migrate init [path]
 ```
 
-Generates `ez-migrate.json` with defaults:
+---
+
+## ⚙️ Configuration
+
+When you run `ez-migrate init`, it will generate an `ez-migrate.config.json` file (and create the migrations/seeds folders if missing).
+
+### ez-migrate.config.json
+
+This file defines how database migrations and seeds are managed and executed.
+
+#### 🔹 `dialect`
+The database type where migrations will be applied.  
+**Possible values:** `"mysql"`, `"sqlite"` (others may be added in the future).
+
+#### 🔹 `migrationsPath`
+Path to the directory where SQL migration files are stored.  
+**Example:** `"./migrations"`
+
+#### 🔹 `seedsPath`
+Path to the directory where SQL seed files are stored.  
+**Example:** `"./seeds"`
+
+#### 🔸 `envKeys`
+Specifies the environment variable names used to connect to the **main** database.
 
 ```json
 {
-  "dialect": "mysql",
-  "trackerDialect": "sqlite",
-  "migrationsPath": "./migrations",
-  "seedsPath": "./seeds",
-  "envKeys": {
-    "user": "DB_USER",
-    "password": "DB_PASSWORD",
-    "port": "DB_PORT",
-    "host": "DB_HOST",
-    "database": "DB_NAME"
-  },
-  "sqlite": { "trackerPath": "./migrations" }
+  "user": "DB_USER",         // Database user
+  "password": "DB_PASSWORD", // Database password
+  "port": "DB_PORT",         // Database port
+  "host": "DB_HOST",         // Database host
+  "database": "DB_NAME"      // Database name
 }
 ```
 
-Set your environment variables (`DB_HOST`, `DB_USER`, etc.) before running commands.
+#### 🔸 `tracker`
+Configuration for the **tracker database**, used to record which migrations have been applied.
+
+```json
+{
+  "envKeys": {
+    "user": "DB_USER",         
+    "password": "DB_PASSWORD",
+    "port": "DB_PORT",         
+    "host": "DB_HOST",         
+    "database": "DB_NAME"      
+  },
+  "dialect": "mysql",          // or "sqlite"
+  "sqlitePath": "./migrations" // only for sqlite tracker
+}
+```
 
 ---
 
@@ -71,48 +114,47 @@ Set your environment variables (`DB_HOST`, `DB_USER`, etc.) before running comma
 ez-migrate <command> [options]
 ```
 
-- \*\*make\*\*\
-  Create a new migration file in `migrations/`.
-
+- **make**  
+  Create a new migration file in `migrations/`.  
   - `-s, --seed`: create a seed file in `seeds/` instead.
 
-- **seed**\
+- **seed**  
   Execute all SQL seed files in order.
 
-- **init [path]**\
-  Generate config, migrations and seeds folders (if missing).
+- **init [path]**  
+  Generate config file
 
-- **status**\
+- **status**  
   Display applied vs pending migrations.
 
-- **migrate**\
+- **migrate**  
   Apply all pending migrations.
 
-- **up**\
+- **up**  
   Run the next pending migration.
 
-- **down**\
+- **down**  
   Roll back the most recent migration.
 
-- **rollback**\
-  Revert the last batch of migrations.
+- **rollback**  
+  Revert the last batch of migrations done.
 
-- **reset**\
-  Roll back all migrations to zero.
+- **reset**  
+  Roll back and apply all migrations
 
-- **redo**\
+- **redo**  
   Undo and reapply the last migration.
 
+---
 
-
-**Examples**
+## 💡 Examples
 
 ```bash
 # Create a new migration
 ez-migrate make add_users_table
 
 # Create a new seed
-ez-migrate make populate_demo_data --seed
+ez-migrate make --seed populate_demo_data
 
 # Apply pending migrations
 ez-migrate migrate
@@ -124,3 +166,33 @@ ez-migrate rollback
 ez-migrate status
 ```
 
+---
+
+## 🔑 Environment Variables
+
+Make sure you have set your environment variables and are specified in your ez-migrate.json before running any commands.
+You can use a `.env`
+
+```dotenv
+DB_HOST=localhost
+DB_USER=root
+DB_PASSWORD=secret
+DB_PORT=3306
+DB_NAME=my_database
+```
+
+---
+
+## 🤝 Contributing
+
+1. Fork the repo  
+2. Create a feature branch (`git switch -c feat/my-feature`)  
+3. Commit your changes (`git commit -m '{feat|fix|ref|chore}: Add this ..'`)  
+4. Push to the branch (`git push origin feat/my-feature`)
+5. Open a Pull Request  
+
+---
+
+## 👤 Author
+
+[@ky210299](https://github.com/ky210299)
