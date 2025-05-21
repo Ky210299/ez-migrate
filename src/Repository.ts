@@ -5,7 +5,7 @@ export const TABLE_NAME = "ez_migration";
  *  allow comparing with the one that returns the databases
  */
 export const TRACKER_SCHEMA = `
-    CREATE TABLE ${TABLE_NAME} (
+    CREATE TABLE IF NOT EXISTS ${TABLE_NAME} (
         batch_id CHAR(36),
         migrated_at CHAR(32) UNIQUE NOT NULL,
         up TEXT NOT NULL,

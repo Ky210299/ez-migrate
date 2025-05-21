@@ -31,19 +31,21 @@ export default class MysqlConnection implements MySQLConnection {
             await this.existsDatabase(this.pool, this.database ?? null)
             console.log(`Using ${this.database} as database target for migration ${migrationPath ?? ""}`)
         } catch (err) {
-            console.warn(`Not existing database ${this.database}.
+            console.warn(`Non-existing database ${this.database}.
 Running migration ${migrationPath?.concat(" ") ?? ""}whihout use any database`)
         }
     }
     async existsDatabase(pool: Pool, database: string | null) {
-        const connection = await pool.getConnection();
+        let connection;
         try {
+            connection = await pool.getConnection();
             await connection.query(`USE ${database}`);
             return database
         } catch (err) {
+            connection?.release()
             throw err
         } finally {
-            connection.release();
+            connection?.release();
         }
     }
     async isConnected(): Promise<boolean> {

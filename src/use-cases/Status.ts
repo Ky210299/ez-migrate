@@ -15,7 +15,7 @@ export default class Status {
         const pino = new PinoConsoleLogger()
         const logger = new ConsoleLoggerImpl(pino)
         
-        const status = new Array(Math.max(allMigrations.length, allMigrationsDone.length))
+        const status = []
         
         for (const migration of allMigrations) {
             const { path, up } = migration.getDetails()
@@ -30,7 +30,11 @@ export default class Status {
             else if (isDone) status.push(`✔ - ${name}`)
             else status.push(`✘ - ${name}`);
         }
-        logger.info("\n" + (status.reverse()).join("\n").trim());
+        logger.info("\n" + (status
+            .reverse()
+            .map((s, i) => `${Math.abs(i - status.length)} ${s.replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+\.\d+-/, "")}`))
+            .join("\n")
+            .trim());
         await tracker.close()
     }
     
