@@ -7,21 +7,20 @@ Perfect for small-to-medium projects that need an easy, zero-boilerplate way to 
 
 ## 📑 Table of Contents
 
-1. [Installation](#installation)  
-2. [Usage](#usage)  
-3. [Configuration](#configuration)  
+1. [Installation](#-installation)  
+2. [Usage](#-usage)  
+3. [Configuration](#-configuration)  
    - [ez-migrate.config.json](#ez-migrateconfigjson)  
-   - [dialect](#dialect)  
-   - [migrationsPath](#migrationspath)  
-   - [seedsPath](#seedspath)  
-   - [envKeys](#envkeys)  
-   - [tracker](#tracker)  
-4. [Commands](#commands)  
-5. [Examples](#examples)  
-6. [Environment Variables](#environment-variables)  
-7. [Contributing](#contributing)  
-8. [Author](#author)  
-
+   - [dialect](#-dialect)  
+   - [migrationsPath](#-migrationspath)  
+   - [seedsPath](#-seedspath)  
+   - [envKeys](#-envkeys)  
+   - [tracker](#-tracker)  
+4. [Commands](#-commands)  
+5. [Examples](#-examples)  
+6. [Environment Variables](#-environment-variables)  
+7. [Contributing](#-contributing)  
+8. [Author](#-author)
 ---
 
 ## 🚀 Installation
@@ -41,7 +40,7 @@ Run via:
 ez-migrate <command> [options]
 
 # If installed locally:
-npx @ky210299/ez-migrate <command> [options]
+npx ez-migrate <command> [options]
 ```
 
 ---
@@ -171,14 +170,14 @@ ez-migrate status
 ## 🔑 Environment Variables
 
 Make sure you have set your environment variables and are specified in your ez-migrate.json before running any commands.
-You can use a `.env`
+You can use a `.env` file
 
 ```dotenv
 DB_HOST=localhost
 DB_USER=root
 DB_PASSWORD=secret
 DB_PORT=3306
-DB_NAME=my_database
+DB_NAME=my_database_name
 ```
 
 ---
