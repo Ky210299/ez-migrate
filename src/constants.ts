@@ -11,7 +11,8 @@ export const MIGRATIONS_DILALECTS = {
 
 export const TRACKER_DIALECTS = {
     SQLITE: "sqlite",
-    MYSQL: "mysql"
+    MYSQL: "mysql",
+    POSTGRES: "postgres"
 } as const
 
 
