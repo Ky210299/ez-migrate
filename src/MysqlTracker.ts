@@ -77,6 +77,9 @@ export default class MysqlTracker implements Persistency{
             }
             connection.release()
     }
+    async init() {
+        // TODO: implement
+    }
     async save(migrations: Array<MigrationData>) {
         const connection = await this.db.getConnection();
         await connection.beginTransaction();

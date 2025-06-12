@@ -77,6 +77,7 @@ export interface Persistency {
     getLastMigrationDone: () => Promise<Migration | null>;
     getLastBatchMigrationDone: () => Promise<Array<Migration> | null>
     
+    init: () => Promise<void>
     close: () => Promise<void>
 }
 
@@ -111,6 +112,7 @@ export default class Repository {
         }
     }
     async listMigrations() {
+        await this.persistency.init();
         return await this.persistency.list();
     }
     async getLastMigrationDone() {
@@ -118,6 +120,10 @@ export default class Repository {
     }
     async getLastBatchMigrationDone(){
         return await this.persistency.getLastBatchMigrationDone();
+    }
+    
+    async init() {
+        await this.persistency.init()
     }
     
     async close() {

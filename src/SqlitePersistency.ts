@@ -43,6 +43,9 @@ export default class SqlitePersistency implements Persistency {
         this.db = new sqlite.DatabaseSync(path);
         this.checkSchema()
     }
+    async init() {
+        
+    }
     async save(migrations: Array<MigrationData>) {
         this.db.exec("BEGIN TRANSACTION");
         const columns = Object.values(this.MIGRATION_COLUMNS);
