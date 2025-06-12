@@ -196,6 +196,7 @@ export default class MysqlTracker implements Persistency{
         `
         const [rows] = await connection.execute(sql, []) as [Array<DBMigrationData>, any];
         connection.release();
+        if (rows.length === 0) return null
         const migrationData = rows[0];
         return migrationData != null ? new Migration({
             ...migrationData,
