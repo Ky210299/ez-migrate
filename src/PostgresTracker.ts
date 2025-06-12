@@ -1,16 +1,71 @@
 import { Client, ClientConfig, QueryResult } from "pg"
 import { consoleLogger } from "./Logger.js";
 
-import { Persistency, TRACKER_SCHEMA, Commit, Rollback, TABLE_NAME } from "./Repository.js";
+import { Persistency, TRACKER_SCHEMA, Commit, Rollback, TABLE_NAME, EXPECTED_SCHEMA } from "./Repository.js";
 import Migration, { MigrationData } from "./Migration.js";
+import { MigrateError } from "./Errors.js";
+import DialectTranslator from "./DialectTraductor.js";
 
 type DBMigrationData =
     Pick<MigrationData, "path" | "up" | "down">
     &
     { batch_id: MigrationData["batchId"], migrated_at: MigrationData["migratedAt"] };
     
+type PGInformationSchemaResult = {
+    table_catalog: string,
+    table_schema: string,  
+    table_name: string,  
+    column_name: string,
+    ordinal_position: string,
+    column_default: string,
+    is_nullable: string,
+    data_type: string,
+    character_maximum_length: string,
+    character_octet_length: string,
+    numeric_precision: string,
+    numeric_precision_radix: string,
+    numeric_scale: string,
+    datetime_precision: string,
+    interval_type: string,
+    interval_precision: string,
+    character_set_catalog: string,
+    character_set_schema: string,
+    character_set_name: string,
+    collation_catalog: string,
+    collation_schema: string,
+    collation_name: string,
+    domain_catalog: string,
+    domain_schema: string,
+    domain_name: string,
+    udt_catalog: string,
+    udt_schema: string,  
+    udt_name: string,
+    scope_catalog: string,
+    scope_schema: string,
+    scope_name: string,
+    maximum_cardinality: string,
+    dtd_identifier: string,
+    is_self_referencing: string,
+    is_identity: string,
+    identity_generation: string,
+    identity_start: string,
+    identity_increment: string,
+    identity_maximum: string,
+    identity_minimum: string,
+    identity_cycle: string,
+    is_generated: string,
+    generation_expression: string,
+    is_updatable: string,
+}
+    
 export default class PGTracker implements Persistency {
     private readonly MIGRATION_TABLE = TABLE_NAME;
+    // TODO:
+    private readonly COMPARE_SQL = `
+        SELECT column_name, data_type, is_nullable
+        FROM information_schema.columns
+        WHERE table_name = ${this.MIGRATION_TABLE};
+      `;
     private readonly MIGRATION_DATABASE = "ez_migration";
     private readonly MIGRATION_COLUMNS = {
         BATCH_ID: "batch_id",
@@ -82,8 +137,63 @@ export default class PGTracker implements Persistency {
     }
     
     private async checkSchema() {
-        await this.db.query(TRACKER_SCHEMA);
-        consoleLogger.info(`Created table "${this.MIGRATION_TABLE}" `)
+        const { rows: tablas } = await this.db.query(`
+            SELECT table_schema, table_name
+            FROM information_schema.tables
+            WHERE table_type = 'BASE TABLE'
+              AND table_schema NOT IN ('pg_catalog','information_schema');
+          `);
+        if (!tablas.some(t => t.table_name === this.MIGRATION_TABLE)) {
+            await this.db.query(TRACKER_SCHEMA);
+            consoleLogger.info(`Created unnexisting table ${this.MIGRATION_TABLE} for migration tracking`);
+            return
+        }
+        // 2) Traer columnas y propiedades de cada tabla pública
+        const { rows: cols } = await this.db.query(`
+            SELECT
+                c.ordinal_position,
+                c.is_nullable, 
+                c.data_type,
+                c.table_schema,
+                c.table_name,
+                c.column_name,
+                c.character_maximum_length,
+                array_agg(tc.constraint_type ORDER BY tc.constraint_type) AS constraints
+            FROM information_schema.columns c
+            LEFT JOIN information_schema.key_column_usage kcu
+                ON c.table_schema = kcu.table_schema
+                AND c.table_name   = kcu.table_name
+                AND c.column_name  = kcu.column_name
+            LEFT JOIN information_schema.table_constraints tc
+                ON kcu.constraint_schema = tc.constraint_schema
+                AND kcu.constraint_name   = tc.constraint_name
+                AND tc.constraint_type IN ('PRIMARY KEY','UNIQUE','FOREIGN KEY')
+            WHERE c.table_schema = 'public'
+            GROUP BY
+                c.ordinal_position,
+                c.is_nullable,
+                c.data_type,
+                c.table_schema,
+                c.table_name,
+                c.column_name,
+                c.character_maximum_length
+            ORDER BY
+                c.table_name,
+                c.ordinal_position;
+            `
+        );
+        EXPECTED_SCHEMA.forEach(expectedField => {
+            const currentField = cols.find(c => c.column_name === expectedField.name)
+            if (!currentField) throw new MigrateError("Missing column in tracker table");
+            if (
+                expectedField.nullable !== (currentField.is_nullable === "YES") ||
+                expectedField.primary !== (currentField.constraints.includes("PRIMARY KEY")) ||
+                expectedField.type !== (DialectTranslator.translate("postgres", "mysql", currentField.data_type.toUpperCase())) || 
+                expectedField.unique !== (currentField.constraints.includes("UNIQUE"))
+            ) { 
+                throw new MigrateError("Invalid tracker table properties");
+            }
+        })
     }
     
     async init() {

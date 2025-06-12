@@ -67,7 +67,7 @@ export default class MysqlTracker implements Persistency{
                 if (checkedColum == null) throw new Error("Wrong tracker schema")
                 if (
                     column.name !== checkedColum.Field ||
-                        column.type !== checkedColum.Type.toUpperCase() ||
+                        column.type.toUpperCase().startsWith(checkedColum.Type.toUpperCase()) ||
                         column.nullable !== (checkedColum.Null !== "NO") ||
                         column.primary !== (checkedColum.Key === "PRI") ||
                         column.name === "path" ? column.unique === (checkedColum.Key !== "UNI") : false

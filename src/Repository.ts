@@ -1,3 +1,4 @@
+import { TranslatableKeyword } from "./DialectTraductor";
 import Migration, { MigrationData } from "./Migration";
 export const TABLE_NAME = "ez_migration";
 /**
@@ -14,17 +15,28 @@ export const TRACKER_SCHEMA = `
         PRIMARY KEY (batch_id, migrated_at)
     )
     `.trim();
-export const EXPECTED_SCHEMA = [
+type ColumnProperty = {
+    name: string,
+    type: TranslatableKeyword,
+    maxChar?: number,
+    nullable: boolean,
+    primary: boolean,
+    unique: boolean,
+    
+}
+export const EXPECTED_SCHEMA: Array<ColumnProperty> = [
     { 
         name: 'batch_id',
-        type: 'CHAR(36)',
+        type: 'CHAR',
+        maxChar: 36,
         nullable: false,
         primary: true,
         unique: false
     },
     { 
         name: 'migrated_at',
-        type: 'CHAR(32)',
+        type: 'CHAR',
+        maxChar: 32,
         nullable: false,
         primary: true,
         unique: true
@@ -45,7 +57,8 @@ export const EXPECTED_SCHEMA = [
     },
     { 
         name: 'path',
-        type: 'VARCHAR(255)',
+        type: 'VARCHAR',
+        maxChar: 255,
         nullable: false,
         primary: false,
         unique: true
