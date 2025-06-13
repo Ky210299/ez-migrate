@@ -12,6 +12,7 @@ export default class Down {
         
         
         const tracker = TrackerFactory.create(config);
+        await tracker.init();
         
         const lastMigration = await tracker.getLastMigrationDone();
         if (lastMigration == null) {

@@ -25,8 +25,16 @@ export interface MySQLConnection extends Connection {
 export interface SqliteConnection extends Connection {
     path: string
 }
+
+export interface PostgresConnection extends Connection {
+    host: string;
+    user: string;
+    password: string | (() => string | Promise<string>);
+    database: string | undefined;
+    port: string | number;
+}
 /** Generic type for all Specific Connections interfaces */
-type DatabaseConnection = MySQLConnection | SqliteConnection;
+type DatabaseConnection = MySQLConnection | SqliteConnection | PostgresConnection;
 
 /** Class that use a DatabaseConnection */
 class DatabaseConnector {

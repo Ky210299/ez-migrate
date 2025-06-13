@@ -9,6 +9,7 @@ export default class Rollback {
     public static async run() {
         const config = new ConfigReader().getConfig();
         const tracker = TrackerFactory.create(config);
+        await tracker.init()
         const lastBatchMigrationDone = await tracker.getLastBatchMigrationDone();
         
         if (lastBatchMigrationDone == null) {

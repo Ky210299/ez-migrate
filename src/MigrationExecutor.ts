@@ -14,6 +14,7 @@ class MigrationExecutor {
     async executeSingleMigrationUp(migration: Migration) {
         await this.dbconnector.testConnection();
         await this.dbconnector.initConnection(migration.getDetails().path, "UP");
+        await this.tracker.init()
         const migrationData = migration.getDetails()
         const { commit, rollback } = await this.tracker.save([migrationData]);
         try {
@@ -27,6 +28,7 @@ class MigrationExecutor {
     async executeSingleMigrationDown(migration: Migration) {
         await this.dbconnector.testConnection();
         await this.dbconnector.initConnection(migration.getDetails().path, "DOWN");
+        await this.tracker.init()
         const migrationData = migration.getDetails();
         const { commit, rollback } = await this.tracker.removeMigration(migrationData);
         try {
@@ -38,6 +40,7 @@ class MigrationExecutor {
     };
     async executeMigrationsUp(migrations: Array<Migration>) {
         await this.dbconnector.testConnection();
+        await this.tracker.init()
         // DDL is not transactional and autocommit after each statement, so we need to track every migration separately
         for (const m of migrations) {
             const migrationData = m.getDetails();
@@ -55,6 +58,7 @@ class MigrationExecutor {
     async executeMigrationsDown(migrations: Array<Migration>) {
         await this.dbconnector.testConnection();
         await this.dbconnector.initConnection("", "DOWN");
+        await this.tracker.init()
         const migrationsData = migrations.map(m => m.getDetails());
         const { commit, rollback } = await this.tracker.removeMigrations(migrationsData);
         try {

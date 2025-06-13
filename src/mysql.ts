@@ -32,7 +32,7 @@ export default class MysqlConnection implements MySQLConnection {
     async init(migrationPath?: string, migrationDirection?: string) {
         try {
             await this.existsDatabase(this.pool, this.database ?? null)
-            this.logger.info(`Using ${this.database} as database target${`${migrationDirection ? " for direction " : ""}`.concat(migrationDirection?.concat(`${migrationPath ? " and " : ""}`) ?? "")}${migrationPath ? `migration: ${migrationPath}` : ""}`)
+            this.logger.info(`Using ${this.database} as database target${`${migrationDirection ? " for direction " : ""}`.concat(migrationDirection?.concat(`${migrationPath ? " and " : ""}`) ?? "")}${migrationPath ? `migration: ${migrationPath.substring(migrationPath.lastIndexOf("/") + 1)}` : ""}`)
         } catch (err) {
             this.logger.warn(`Non-existing database ${this.database}`);
             this.logger.warn(`Running migration ${migrationPath?.concat(" ") ?? ""}whihout use any database`);

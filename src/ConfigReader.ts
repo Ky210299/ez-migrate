@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { isErrnoException, throwMessage } from "./Errors";
-import { CONFIG_PATH, DEFAULT_CONFIG, MIGRATIONS_DILALECTS } from "./constants";
+import { CONFIG_PATH, DEFAULT_CONFIG, MIGRATIONS_DIALECTS } from "./constants";
 
 import { consoleLogger } from "./Logger";
 
@@ -47,7 +47,7 @@ export default class ConfigReader {
         if (!this.config.envKeys.database) consoleLogger.warn("Database name is not especified");
         if (!this.config.tracker.envKeys.password) consoleLogger.warn("Password is not especified for tracker database")
         if (!this.config.tracker.envKeys.database) consoleLogger.warn("Tracker name is not especified");
-        if (Object.values(MIGRATIONS_DILALECTS).includes(this.config.dialect) === false) {
+        if (Object.values(MIGRATIONS_DIALECTS).includes(this.config.dialect) === false) {
             consoleLogger.error("Invalid dialect")
             throw ""
         }

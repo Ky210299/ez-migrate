@@ -2,6 +2,7 @@ import { Pool, createPool, PoolOptions } from "mysql2/promise";
 
 import { Persistency, TRACKER_SCHEMA, Commit, Rollback, TABLE_NAME, EXPECTED_SCHEMA } from "./Repository.js";
 import Migration, { MigrationData } from "./Migration.js";
+import { consoleLogger } from "./Logger.js";
 
 type DBMigrationData =
     Pick<MigrationData, "path" | "up" | "down">
@@ -45,7 +46,7 @@ export default class MysqlTracker implements Persistency{
             multipleStatements: true,
             connectionLimit: 1,
         });
-        this.checkSchema().then().catch((err)=> console.log(err))
+        this.checkSchema().then().catch((err)=> consoleLogger.error(err))
     }
 
     private async checkSchema() {
@@ -67,7 +68,7 @@ export default class MysqlTracker implements Persistency{
                 if (checkedColum == null) throw new Error("Wrong tracker schema")
                 if (
                     column.name !== checkedColum.Field ||
-                        column.type !== checkedColum.Type.toUpperCase() ||
+                        column.type.toUpperCase().startsWith(checkedColum.Type.toUpperCase()) ||
                         column.nullable !== (checkedColum.Null !== "NO") ||
                         column.primary !== (checkedColum.Key === "PRI") ||
                         column.name === "path" ? column.unique === (checkedColum.Key !== "UNI") : false
@@ -76,6 +77,9 @@ export default class MysqlTracker implements Persistency{
                 );
             }
             connection.release()
+    }
+    async init() {
+        // TODO: implement
     }
     async save(migrations: Array<MigrationData>) {
         const connection = await this.db.getConnection();
@@ -193,6 +197,7 @@ export default class MysqlTracker implements Persistency{
         `
         const [rows] = await connection.execute(sql, []) as [Array<DBMigrationData>, any];
         connection.release();
+        if (rows.length === 0) return null
         const migrationData = rows[0];
         return migrationData != null ? new Migration({
             ...migrationData,

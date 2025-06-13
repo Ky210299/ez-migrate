@@ -12,6 +12,7 @@ export default class Migrate {
         const config = new ConfigReader().getConfig();
         
         const tracker = TrackerFactory.create(config)
+        await tracker.init()
         const lastMigration = await tracker.getLastMigrationDone()
        
         const { migrationsPath } = config
@@ -60,6 +61,5 @@ export default class Migrate {
         }
         await migrationExecutor.executeMigrationsUp(migrations);
         await migrationExecutor.close()
-        await tracker.close();
     }
 }

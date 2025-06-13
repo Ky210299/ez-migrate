@@ -32,6 +32,7 @@ export default class Up {
         const config = configReader.getConfig();
         
         const tracker = TrackerFactory.create(config);
+        await tracker.init();
         const { migrationsPath } = config;
         const schemaHandler = new SchemasHandler({ migrationsPath });
         const nextMigration = await Up.getNextMigration(schemaHandler, tracker);

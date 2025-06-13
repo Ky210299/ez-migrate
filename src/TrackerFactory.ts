@@ -5,6 +5,7 @@ import SqlitePersistency from "./SqlitePersistency";
 import MysqlTracker from "./MysqlTracker";
 import { Config } from "./types";
 import { consoleLogger } from "./Logger";
+import PGTracker from "./PostgresTracker";
 
 /** Create a tracker for the migrations. By default use sqlite */
 export default class TrackerFactory {
@@ -34,6 +35,21 @@ export default class TrackerFactory {
                 const { host, user, password, port, database } = connectionData;
                 const mysqlConnection = new MysqlTracker({ host, user, password, port, database, })
                 return new Repository(mysqlConnection)
+            }
+            case TRACKER_DIALECTS.POSTGRES: {
+                try { process.loadEnvFile() } 
+                catch (err) { consoleLogger.warn("Environment not loaded. Using default configurations") }
+                const { env: ENV } = process;
+                const connectionData = { 
+                    host: ENV[envKeys.host],
+                    user: ENV[envKeys.user], 
+                    password: ENV[envKeys.password],
+                    port: Number(ENV[envKeys.port]),
+                    database: ENV[envKeys.database],
+                }
+                const { host, user, password, port, database } = connectionData;
+                const pgConnection = new PGTracker({ host, user, password, port, database })
+                return new Repository(pgConnection)
             }
             default: {
                 consoleLogger.error("Invalid Tracker dialect")

@@ -9,6 +9,7 @@ export default class Reset {
         const config = new ConfigReader().getConfig();
         
         const tracker = TrackerFactory.create(config);
+        await tracker.init();
         const migrationsDone = await tracker.listMigrations()
         const connection = ConnectionFactory.create(config);
         if (migrationsDone.length) {
