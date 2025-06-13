@@ -254,7 +254,6 @@ export default class PGTracker implements Persistency {
     };
     
     async list(): Promise<Array<Migration>> { 
-        await this.db.query("BEGIN;")
         const sql = `SELECT * FROM ${this.MIGRATION_TABLE};`
         const { rows: migrations } = await this.db.query(sql) as QueryResult<DBMigrationData>;
         return migrations.map(m => new Migration({
