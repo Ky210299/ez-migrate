@@ -3,6 +3,7 @@ import { Persistency, TRACKER_SCHEMA, Commit, Rollback, TABLE_NAME } from "./Rep
 import Migration, { MigrationData } from "./Migration.js";
 
 import type { DatabaseSync } from "node:sqlite";
+import { consoleLogger } from "./Logger.js";
 
 type DBMigrationData =
     Pick<MigrationData, "path" | "up" | "down"> 
@@ -72,7 +73,7 @@ export default class SqlitePersistency implements Persistency {
         };
         const rollback: Rollback = async () => {
             this.db.exec("ROLLBACK");
-            console.warn("Rollback successfuly")
+            consoleLogger.warn("sqlite tracker rollback successfuly")
         }
 
         try {
@@ -102,7 +103,7 @@ export default class SqlitePersistency implements Persistency {
         };
         const rollback: Rollback = async () => {
             this.db.exec("ROLLBACK");
-            console.warn("Rollback tracker successfuly")
+            consoleLogger.warn("Rollback tracker successfuly")
         }
         try {
             q.run(...values);
@@ -141,7 +142,7 @@ export default class SqlitePersistency implements Persistency {
         };
         const rollback: Rollback = async () => {
             this.db.exec("ROLLBACK");
-            console.warn("Rollback tracker successfuly")
+            consoleLogger.warn("Rollback tracker successfuly")
         }
         try {
             q.run(migration.migratedAt);

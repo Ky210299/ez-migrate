@@ -180,7 +180,7 @@ export default class PGTracker implements Persistency {
         };
         const rollback: Rollback = async () => {
             await this.db.query("ROLLBACK;")
-            console.warn("Rollback successfuly")
+            consoleLogger.warn("Postgrest rollback successfuly at save migration")
         }
         try {
             await this.db.query(sql, values);
@@ -209,7 +209,7 @@ export default class PGTracker implements Persistency {
         };
         const rollback: Rollback = async () => {
             await this.db.query("ROLLBACK;")
-            console.warn("Rollback successfuly")
+            consoleLogger.warn("Postgres tracker rollback successfuly at remove migrations")
         }
         try {
             await this.db.query(sql, values);
@@ -235,7 +235,7 @@ export default class PGTracker implements Persistency {
         };
         const rollback: Rollback = async () => {
             await this.db.query("ROLLBACK;")
-            consoleLogger.warn("Tracker rollback successfuly")
+            consoleLogger.warn("Postgres tracker rollback successfuly remove migration ")
         }
         
         try {

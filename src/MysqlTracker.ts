@@ -110,7 +110,7 @@ export default class MysqlTracker implements Persistency{
         const rollback: Rollback = async () => {
             await connection.rollback()
             connection.release()
-            console.warn("Rollback successfuly")
+            console.warn("MySQL tracker rollback successfuly at save migration")
         }
 
         try {
@@ -137,7 +137,7 @@ export default class MysqlTracker implements Persistency{
         };
         const rollback: Rollback = async () => {
             await connection.rollback();
-            console.warn("Rollback tracker successfuly")
+            console.warn("MySQL tracker rollback successfuly at remove migrations")
             connection.release()
         }
 
@@ -166,7 +166,7 @@ export default class MysqlTracker implements Persistency{
         const rollback: Rollback = async () => {
             await connection.rollback()
             connection.release()
-            console.warn("Rollback tracker successfuly")
+            console.warn("MySQL tracker rollback successfuly at remove migration")
         }
         try {
             await connection.execute(sql, [migration.migratedAt]);
