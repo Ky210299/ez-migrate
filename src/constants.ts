@@ -31,11 +31,11 @@ export const DEFAULT_CONFIG: Config = {
     },
     tracker: {
         envKeys: {
-            user: "DB_USER",
-            password: "DB_PASSWORD",
-            port: "DB_PORT",
-            host: "DB_HOST",
-            database: "DB_NAME"
+            user: "TRACKER_USER",
+            password: "TRACKER_PASSWORD",
+            port: "TRACKER_PORT",
+            host: "TRACKER_HOST",
+            database: "TRACKER_NAME"
         },
         dialect: TRACKER_DIALECTS.MYSQL,
         sqlitePath: DEFAULT_MIGRATION_PATH
