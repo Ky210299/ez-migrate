@@ -11,62 +11,8 @@ type DBMigrationData =
     &
     { batch_id: MigrationData["batchId"], migrated_at: MigrationData["migratedAt"] };
     
-type PGInformationSchemaResult = {
-    table_catalog: string,
-    table_schema: string,  
-    table_name: string,  
-    column_name: string,
-    ordinal_position: string,
-    column_default: string,
-    is_nullable: string,
-    data_type: string,
-    character_maximum_length: string,
-    character_octet_length: string,
-    numeric_precision: string,
-    numeric_precision_radix: string,
-    numeric_scale: string,
-    datetime_precision: string,
-    interval_type: string,
-    interval_precision: string,
-    character_set_catalog: string,
-    character_set_schema: string,
-    character_set_name: string,
-    collation_catalog: string,
-    collation_schema: string,
-    collation_name: string,
-    domain_catalog: string,
-    domain_schema: string,
-    domain_name: string,
-    udt_catalog: string,
-    udt_schema: string,  
-    udt_name: string,
-    scope_catalog: string,
-    scope_schema: string,
-    scope_name: string,
-    maximum_cardinality: string,
-    dtd_identifier: string,
-    is_self_referencing: string,
-    is_identity: string,
-    identity_generation: string,
-    identity_start: string,
-    identity_increment: string,
-    identity_maximum: string,
-    identity_minimum: string,
-    identity_cycle: string,
-    is_generated: string,
-    generation_expression: string,
-    is_updatable: string,
-}
-    
 export default class PGTracker implements Persistency {
     private readonly MIGRATION_TABLE = TABLE_NAME;
-    // TODO:
-    private readonly COMPARE_SQL = `
-        SELECT column_name, data_type, is_nullable
-        FROM information_schema.columns
-        WHERE table_name = ${this.MIGRATION_TABLE};
-      `;
-    private readonly MIGRATION_DATABASE = "ez_migration";
     private readonly MIGRATION_COLUMNS = {
         BATCH_ID: "batch_id",
         MIGRATED_AT: "migrated_at",
@@ -116,7 +62,7 @@ export default class PGTracker implements Persistency {
                 database: this.database
             });
             await this.db.connect();
-            consoleLogger.info(`Using existing ${this.database} database`)
+            consoleLogger.info(`Using existing ${this.database} database for tracking`)
             return;
         }
         consoleLogger.info(`"${this.database}" doest'n exists.`)

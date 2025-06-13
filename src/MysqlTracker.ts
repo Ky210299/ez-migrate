@@ -2,6 +2,7 @@ import { Pool, createPool, PoolOptions } from "mysql2/promise";
 
 import { Persistency, TRACKER_SCHEMA, Commit, Rollback, TABLE_NAME, EXPECTED_SCHEMA } from "./Repository.js";
 import Migration, { MigrationData } from "./Migration.js";
+import { consoleLogger } from "./Logger.js";
 
 type DBMigrationData =
     Pick<MigrationData, "path" | "up" | "down">
@@ -45,7 +46,7 @@ export default class MysqlTracker implements Persistency{
             multipleStatements: true,
             connectionLimit: 1,
         });
-        this.checkSchema().then().catch((err)=> console.log(err))
+        this.checkSchema().then().catch((err)=> consoleLogger.error(err))
     }
 
     private async checkSchema() {

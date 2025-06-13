@@ -7,6 +7,7 @@ export const DEFAULT_SEEDS_PATH = "./seeds";
 export const MIGRATIONS_DIALECTS = {
     MYSQL: "mysql",
     SQLITE: "sqlite",
+    POSTGRES: "postgres",
 } as const;
 
 export const TRACKER_DIALECTS = {

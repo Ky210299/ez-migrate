@@ -4,6 +4,7 @@ import DatabaseConnector from "./DatabaseConnector"
 import { Config } from "./types";
 import SqliteConnection from "./sqlite";
 import { consoleLogger } from "./Logger";
+import PostgresConnectionImpl from "./Postgres";
 
 /** Create DBMS connections by they dialect. Throw if doesn't support the dialect */
 export default class ConnectionFactory {
@@ -33,6 +34,21 @@ export default class ConnectionFactory {
                 const { sqlitePath } = config.tracker;
                 const sqliteConnection = new SqliteConnection(sqlitePath);
                 return new DatabaseConnector(sqliteConnection, {logger: consoleLogger})
+            }
+            case MIGRATIONS_DIALECTS.POSTGRES: {
+                try { process.loadEnvFile() } 
+                catch (err) { consoleLogger.warn("Environment not loaded. Using default configurations") }
+                const { env: ENV } = process;
+                const connectionData = { 
+                    host: ENV[envKeys.host],
+                    user: ENV[envKeys.user], 
+                    password: ENV[envKeys.password],
+                    port: Number(ENV[envKeys.port]),
+                    database: ENV[envKeys.database],
+                }
+                const { host, user, password, port, database } = connectionData;
+                const postgresConnection = new PostgresConnectionImpl({ host, user, password, port, database, logger: consoleLogger });
+                return new DatabaseConnector(postgresConnection, { logger: consoleLogger });
             }
             default: {
                 consoleLogger.error("Migration dialect not supported")
