@@ -21,6 +21,7 @@ export const DEFAULT_CONFIG: Config = {
     dialect: MIGRATIONS_DIALECTS.MYSQL,
     migrationsPath: DEFAULT_MIGRATION_PATH,
     seedsPath: DEFAULT_SEEDS_PATH,
+    sqlitePath: DEFAULT_MIGRATION_PATH,
     envKeys: {                                 
         user: "DB_USER",
         password: "DB_PASSWORD",
