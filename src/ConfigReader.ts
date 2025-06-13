@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { isErrnoException, throwMessage } from "./Errors";
+import { isErrnoException, logErrorMessage } from "./Errors";
 import { CONFIG_PATH, DEFAULT_CONFIG, MIGRATIONS_DIALECTS } from "./constants";
 
 import { consoleLogger } from "./Logger";
@@ -11,11 +11,35 @@ import type { Config } from "./types";
  * default configuration 
 */
 export default class ConfigReader {
-    private config: Config = DEFAULT_CONFIG;
+    private config: Config = structuredClone(DEFAULT_CONFIG);
     constructor() {
+        const userConfig: Partial<Config> | null = this.readConfig();
+        if (userConfig == null) {
+            consoleLogger.warn("Using default configuration")
+            return;
+        }
         this.config = {
             ...this.config,
-            ...this.readConfig()
+            ...userConfig,
+            envKeys: {
+                ...this.config.envKeys,
+                ...userConfig.envKeys
+            },
+            tracker: {
+                ...this.config.tracker,
+                ...(userConfig.tracker != null ? { ...userConfig.tracker } : {}),
+                envKeys: {
+                    ...this.config.tracker.envKeys,
+                    ...(userConfig.tracker?.envKeys != null ? { ...userConfig?.tracker.envKeys } : {})
+                }
+            }
+        }
+        if (userConfig.tracker == null) {
+            this.config.tracker.dialect = userConfig.dialect ?? DEFAULT_CONFIG.dialect
+            this.config.tracker.sqlitePath = userConfig.sqlitePath ?? DEFAULT_CONFIG.sqlitePath
+            this.config.tracker.envKeys = {
+                ...this.config.envKeys
+            };
         }
         this.validateConfig();
     }
@@ -30,10 +54,12 @@ export default class ConfigReader {
             return JSON.parse(json);
         } catch (err) {
             if (isErrnoException(err)) {
-                consoleLogger.error("Error reading the config file: \nCheck if exist ez-migrate.json in your root");
-                throwMessage(err as NodeJS.ErrnoException);
+                consoleLogger.warn("Cannot read ez-migrate.json. Check if exists in your root.");
+                logErrorMessage(err as NodeJS.ErrnoException);
+                return null
             }
             consoleLogger.error(`Error reading the config file: \n${err}`);
+            return null
         }
     }
 
@@ -44,7 +70,10 @@ export default class ConfigReader {
             throw ""
         }
         if (!this.config.envKeys.password) consoleLogger.warn("Password is not especified for database migration target")
-        if (!this.config.envKeys.database) consoleLogger.warn("Database name is not especified");
+        if (!this.config.envKeys.database) {
+            consoleLogger.error("Database name is not especified");
+            throw ""
+        }
         if (!this.config.tracker.envKeys.password) consoleLogger.warn("Password is not especified for tracker database")
         if (!this.config.tracker.envKeys.database) consoleLogger.warn("Tracker name is not especified");
         if (Object.values(MIGRATIONS_DIALECTS).includes(this.config.dialect) === false) {
