@@ -65,6 +65,10 @@ export default class PGTracker implements Persistency {
             consoleLogger.info(`Using existing ${this.database} database for tracking`)
             return;
         }
+        if (this.database == null) {
+            consoleLogger.warn("Undefined database. Using default database postgres");
+            return
+        }
         consoleLogger.info(`"${this.database}" doest'n exists.`)
         await this.db.query(`
             CREATE DATABASE ${this.database}

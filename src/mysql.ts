@@ -44,7 +44,14 @@ export default class MysqlConnection implements MySQLConnection {
             await connection.query(`USE ${database}`);
             return database
         } catch (err) {
-            connection?.release()
+            if (database != null && connection != null) {
+                await connection.query(`
+                        CREATE DATABASE ${database};
+                        USE ${database}
+                    `);
+                consoleLogger.info(`Database ${database} created`);
+                return
+            }
             throw err
         } finally {
             connection?.release();

@@ -8,7 +8,7 @@ export default class PostgresConnectionImpl implements PostgresConnection{
     readonly host: string;
     readonly user: string;
     readonly password: string | (() => string | Promise<string>);
-    readonly database: string | undefined;
+    database: string | undefined;
     readonly port: string | number;
     readonly logger: ConsoleLoggerImpl;
     
@@ -56,6 +56,11 @@ export default class PostgresConnectionImpl implements PostgresConnection{
             await this.client.connect();
             return;
         }
+        if (this.database == null) {
+            this.logger.warn("Undefined database. Using default database postgres");
+            this.database = "postgres"
+            return
+        }
         this.logger.info(`"${this.database}" doest'n exists.`);
         await this.client.query(`
             CREATE DATABASE ${this.database}
@@ -94,7 +99,7 @@ export default class PostgresConnectionImpl implements PostgresConnection{
         } catch (err) {
             this.logger.warn(`Non-existing or unreachable database ${this.database}`);
             this.logger.warn(
-                `Running migration ${migrationPath?.concat(" ") ?? ""}without using any database`
+                `Trying to run migration ${migrationPath?.concat(" ") ?? ""}without using any database`
             );
         } finally {
             this.initialized = true
