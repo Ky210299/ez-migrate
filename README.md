@@ -10,7 +10,7 @@ Perfect for small-to-medium projects that need an easy, zero-boilerplate way to 
 1. [Installation](#-installation)  
 2. [Usage](#-usage)  
 3. [Configuration](#-configuration)  
-   - [ez-migrate.config.json](#ez-migrateconfigjson)  
+   - [ez-migrate.json](#ez-migratejson)  
    - [dialect](#-dialect)  
    - [migrationsPath](#-migrationspath)  
    - [seedsPath](#-seedspath)  
@@ -57,15 +57,15 @@ ez-migrate init [path]
 
 ## ⚙️ Configuration
 
-When you run `ez-migrate init`, it will generate an `ez-migrate.config.json` file (and create the migrations/seeds folders if missing).
+When you run `ez-migrate init`, it will generate an `ez-migrate.json` file (and create the migrations/seeds folders if missing)
 
-### ez-migrate.config.json
+### ez-migrate.json
 
 This file defines how database migrations and seeds are managed and executed.
 
 #### 🔹 `dialect`
 The database type where migrations will be applied.  
-**Possible values:** `"mysql"`, `"sqlite"` (others may be added in the future).
+**Possible values:** `"mysql"`, `"sqlite"`, `"postgres"` (others may be added in the future).
 
 #### 🔹 `migrationsPath`
 Path to the directory where SQL migration files are stored.  
@@ -76,15 +76,15 @@ Path to the directory where SQL seed files are stored.
 **Example:** `"./seeds"`
 
 #### 🔸 `envKeys`
-Specifies the environment variable names used to connect to the **main** database.
+Specifies the environment variable names used to connect to the database target of migrations.
 
 ```json
 {
-  "user": "DB_USER",         // Database user
-  "password": "DB_PASSWORD", // Database password
-  "port": "DB_PORT",         // Database port
-  "host": "DB_HOST",         // Database host
-  "database": "DB_NAME"      // Database name
+  "user": "DB_USER",         
+  "password": "DB_PASSWORD", 
+  "port": "DB_PORT",         
+  "host": "DB_HOST",         
+  "database": "DB"      
 }
 ```
 
@@ -94,18 +94,80 @@ Configuration for the **tracker database**, used to record which migrations have
 ```json
 {
   "envKeys": {
-    "user": "DB_USER",         
-    "password": "DB_PASSWORD",
-    "port": "DB_PORT",         
-    "host": "DB_HOST",         
-    "database": "DB_NAME"      
+    "user": "TRACKER_USER",         
+    "password": "TRACKER_PASSWORD",
+    "port": "TRACKER_PORT",         
+    "host": "TRACKER_HOST",         
+    "database": "TRACKER_NAME"      
   },
-  "dialect": "mysql",          // or "sqlite"
-  "sqlitePath": "./migrations" // only for sqlite tracker
+  "dialect": "postgres",
+  "sqlitePath": "./migrations" 
 }
 ```
 
+### Example 1:
+```json
+{
+    "dialect": "postgres",
+    "envKeys": {
+        "user": "DB_USER",
+        "password": "DB_PASSWORD",
+        "port": "DB_PORT",
+        "host": "DB_HOST",
+        "database": "DB"
+    },
+    "tracker": {
+        "envKeys": {
+            "user": "TRACKER_USER",
+            "password": "TRACKER_PASSWORD",
+            "port": "TRACKER_PORT",
+            "host": "TRACKER_HOST",
+            "database": "TRACKER_DB"
+        },
+        "dialect": "mysql"
+    }
+}
+```
+.env file that fit with the ez-migrate.json:
+```dotenv
+DB_USER=leonardobazanmarquez
+DB_PASSWORD=my_super_password
+DB_PORT=5432
+DB_HOST=exampledbhost.com
+DB=my_db_name
+
+TRACKER_USER=root
+TRACKER_PASSWORD=xyzabc122
+TRACKER_PORT=3306
+TRACKER_HOST=mytrackerhost.com
+TRACKER_DB=my_tracker_database_name
+```
+
+### Example 2:
+```json
+# ez-migrate.json
+{
+    "dialect": "mysql",
+    "envKeys": {
+        "user": "DB_USER",
+        "password": "DB_PASSWORD",
+        "port": "DB_PORT",
+        "host": "DB_HOST",
+        "database": "DB"
+    },
+}
+```
+.env file that fit with the previous ez-migrate.json:
+```dotenv
+DB_USER=leonardobazanmarquez
+DB_PASSWORD=my_super_password
+DB_PORT=5432
+DB_HOST=exampledbhost.com
+DB=my_db_name
+```
+The previous example uses the same database and DBMS as the migration target.
 ---
+This setup uses the same MySQL database for both migrations and tracking.
 
 ## 📚 Commands
 
@@ -171,13 +233,14 @@ ez-migrate status
 
 Make sure you have set your environment variables and are specified in your ez-migrate.json before running any commands.
 You can use a `.env` file
+If you use it without .env or ez-migrate.json, default configurations are used (MySQL for migrations and tracking)
 
 ```dotenv
 DB_HOST=localhost
 DB_USER=root
 DB_PASSWORD=secret
 DB_PORT=3306
-DB_NAME=my_database_name
+DB=my_database_name
 ```
 
 ---
