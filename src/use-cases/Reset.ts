@@ -18,5 +18,6 @@ export default class Reset {
             await migrationExecutor.close()
         }
         await Migrate.run();
+        tracker.close()
     }
 }
