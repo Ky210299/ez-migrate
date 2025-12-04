@@ -3,7 +3,6 @@
     "version": "0.3.0",
     "description": "A easy library for make SQL migrations",
     "main": "dist/ez-migrate.js",
-    "type": "module",
     "bin": {
         "ez-migrate": "dist/ez-migrate.js"
     },

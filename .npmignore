@@ -15,4 +15,4 @@ tests/
 migrations/
 
 dist/**/*.map
-
+seeds/
