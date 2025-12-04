@@ -4,7 +4,7 @@ import { DEFAULT_MIGRATION_PATH } from "./constants";
 import { randomUUID } from "node:crypto";
 import Migration from "./Migration";
 
-type SchemaHandlerArguments = { migrationsPath: string };
+type SchemaHandlerArguments = { migrationsPath?: string };
 
 /** Class for handle the migrations file schemas */
 export default class SchemasHandler {

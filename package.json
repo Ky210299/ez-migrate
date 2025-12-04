@@ -3,6 +3,7 @@
     "version": "0.3.0",
     "description": "A easy library for make SQL migrations",
     "main": "dist/ez-migrate.js",
+    "type": "module",
     "bin": {
         "ez-migrate": "dist/ez-migrate.js"
     },
@@ -35,6 +36,7 @@
         "@types/pg": "^8.15.2",
         "eslint": "^9.24.0",
         "typescript": "^5.8.3",
-        "typescript-eslint": "^8.29.0"
+        "typescript-eslint": "^8.29.0",
+        "vitest": "^4.0.15"
     }
 }
