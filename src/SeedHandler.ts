@@ -9,8 +9,8 @@ export default class SeedHandler {
     private readonly SQLCommentsRegExp = /(--|#|\/\/).*$/gm
     constructor(config: Config) {
         const { seedsPath } = config
-        
         this.SEEDS_PATH = seedsPath
+        mkdirSync(this.SEEDS_PATH)
     }
     
     hasDDL(sql: string) {
