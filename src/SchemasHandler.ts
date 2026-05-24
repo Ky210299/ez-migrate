@@ -24,7 +24,7 @@ export default class SchemasHandler {
 `.trim();
     constructor({ migrationsPath }: SchemaHandlerArguments) {
         this.migrationsPath = migrationsPath ?? DEFAULT_MIGRATION_PATH;
-        mkdirSync(this.migrationsPath)
+        mkdirSync(this.migrationsPath, {recursive: true})
 
     }
     hasDML(sql: string){

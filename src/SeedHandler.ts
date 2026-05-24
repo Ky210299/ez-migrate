@@ -24,7 +24,7 @@ export default class SeedHandler {
     private ensureSeedsPathExists() {
         try {
             if (this.SEEDS_PATH == null) return;
-            mkdirSync(this.SEEDS_PATH);
+            mkdirSync(this.SEEDS_PATH, {recursive: true});
         } catch (err) {
             if (isErrnoException(err)) {
                 const { errno } = err;
