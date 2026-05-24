@@ -13,6 +13,7 @@ export default class Make {
         const config = new ConfigReader().getConfig()
         const { migrationsPath } = config
         const schemaHandler = new SchemasHandler({ migrationsPath });
-        schemaHandler.makeMigrationFile(name);
+        const path = schemaHandler.makeMigrationFile(name);
+        return path
     }
 }

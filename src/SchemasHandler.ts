@@ -104,6 +104,7 @@ export default class SchemasHandler {
 
         if (existsSync(path)) throw new Error("The migration file already exists");
         writeFileSync(path, this.migrationSQLTemplate);
+        return path
     }
 
     private combineSchemas(schemasPaths: Array<string>): string {

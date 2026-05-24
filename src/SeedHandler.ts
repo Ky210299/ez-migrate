@@ -56,6 +56,7 @@ export default class SeedHandler {
         const path = `${this.SEEDS_PATH}${endWithSlash ? "" : "/"}${now}-${name}.sql`;
         if (existsSync(path)) throw new Error("The migration file already exists");
         writeFileSync(path, this.SEEDS_TEMPLATE);
+        return path
     }
     
     getSeeds() {

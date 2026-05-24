@@ -12,6 +12,7 @@ export default class MakeSeed {
         }
         const config = new ConfigReader().getConfig()
         const seedHandler = new SeedHandler(config);
-        seedHandler.makeSeedFile(name);
+        const path = seedHandler.makeSeedFile(name);
+        return path
     }
 }
