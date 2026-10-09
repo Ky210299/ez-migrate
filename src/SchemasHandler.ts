@@ -2,7 +2,9 @@ import { writeFileSync, mkdirSync, readdirSync, readFileSync, existsSync } from 
 import { ERRORS, isErrnoException } from "./Errors";
 import { DEFAULT_MIGRATION_PATH } from "./constants";
 import { randomUUID } from "node:crypto";
+import { basename } from "node:path";
 import Migration from "./Migration";
+import { isEmptySQL, normalizeSQL } from "./sql";
 
 type SchemaHandlerArguments = { migrationsPath: string };
 
@@ -10,8 +12,7 @@ type SchemaHandlerArguments = { migrationsPath: string };
 export default class SchemasHandler {
     /** The separator for up and down sql  */
     private readonly upDownSeparatorRegExp = /^-- ez-migration-(up|down)/gm;
-    private readonly DMLRegExp = /(?:^|;)\s*(?:INSERT\s+INTO|DELETE\s+FROM|UPDATE)\b/mi
-    private readonly SQLCommentsRegExp = /(--|#|\/\/).*$/gm
+    private readonly DMLRegExp = /(?:^|;)\s*(?:INSERT\s+INTO|DELETE\s+FROM|UPDATE)\b/i
     private readonly migrationsPath: string;
     /** Migration file template. It's necessary to use this for successfuly run migrations */
     private readonly migrationSQLTemplate = `-- ez-migration-up
@@ -28,14 +29,9 @@ export default class SchemasHandler {
 
     }
     hasDML(sql: string){
-        return this.DMLRegExp.test(sql);
+        return this.DMLRegExp.test(normalizeSQL(sql));
     }
 
-    private normalizeSQL(sql: string) {
-        const withoutComments = sql.replace(this.SQLCommentsRegExp, " ");
-        const withoutLineBreaks = withoutComments.replace(/\n/g, " ")
-        return withoutLineBreaks.replace(/\s+/g, " ");
-    }
     private ensureMigrationPathExists() {
         try {
             if (this.migrationsPath == null) return;
@@ -65,7 +61,7 @@ export default class SchemasHandler {
 
     private splitUpAndDownFromSQL(sql: string) {
         const matches = sql.matchAll(this.upDownSeparatorRegExp);
-        let info = [];
+        const info = [];
         for (const match of matches) {
             const [text, direction] = match;
             const { index } = match;
@@ -86,11 +82,12 @@ export default class SchemasHandler {
         upIndexs[0] = upIndexs[0] + upCommentLen;
         downIndexs[0] = downIndexs[0] + downCommentLen;
 
-        const up = this.normalizeSQL(sql.slice(...upIndexs)).trim();
-        const down = this.normalizeSQL(sql.slice(...downIndexs)).trim();
+        // Keep the SQL as written: the database handles comments and line breaks
+        const up = sql.slice(...upIndexs).trim();
+        const down = sql.slice(...downIndexs).trim();
 
-        if (!up) throw new Error("The UP migration section is empty");
-        if (!down) throw new Error("The DOWN migration section is empty");
+        if (isEmptySQL(up)) throw new Error("The UP migration section is empty");
+        if (isEmptySQL(down)) throw new Error("The DOWN migration section is empty");
         
         return { up, down };
     }
@@ -213,6 +210,24 @@ export default class SchemasHandler {
         return this.addMigrationPathToSchemasName(schemasFilesNames).sort();
     }
     
+    /**
+     * Migrations whose file is not tracked as done, in file name order.
+     * Files are compared by name, so a migration with an older name that was
+     * added later (for example from another branch) is also pending.
+     */
+    getPendingMigrations(done: Array<Migration>, batchId: string = randomUUID()) {
+        const doneNames = new Set(done.map(m => basename(m.getDetails().path)));
+        return this.getAllMigrations()
+            .filter(path => !doneNames.has(basename(path)))
+            .map(path => this.makeMigrationFromFile(path, batchId));
+    }
+
+    /** The migration file with the same name as the given migration, or null if it doesn't exist */
+    findMigrationFile(migration: Migration) {
+        const name = basename(migration.getDetails().path);
+        return this.getAllMigrations().find(path => basename(path) === name) ?? null;
+    }
+
     makeMigrationFromFile(filePath: string, batchId?: string) {
         const sql = this.readSQL(filePath)
         if (!sql) throw new Error("Migration file is empty or doesn't exists");

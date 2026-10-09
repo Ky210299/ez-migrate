@@ -2,6 +2,7 @@ import { Client } from "pg";
 import type { ClientConfig } from "pg";
 import { ConsoleLoggerImpl } from "./Logger";
 import { PostgresConnection } from "./DatabaseConnector";
+import { describeTarget } from "./utils";
 
 export default class PostgresConnectionImpl implements PostgresConnection{
     readonly DBMSName: string = "postgres";
@@ -12,8 +13,7 @@ export default class PostgresConnectionImpl implements PostgresConnection{
     readonly port: string | number;
     readonly logger: ConsoleLoggerImpl;
     
-    initialized: boolean = false;
-    private client: Client;
+    private client: Client | null = null;
 
     constructor({
         user,
@@ -29,102 +29,75 @@ export default class PostgresConnectionImpl implements PostgresConnection{
         this.port = port ?? 5432;
         this.database = database;
         this.logger = logger;
+    }
 
-        this.client = new Client({
+    private newClient(database: string) {
+        return new Client({
             host: this.host,
             user: this.user,
             password: this.password,
             port: Number(this.port),
-            database: "postgres",
+            database,
         });
     }
 
-    private async ensureUseDatabase() {
-        const { rowCount } = await this.client.query(`
-            SELECT * FROM pg_database WHERE datname = $1
-            `, [this.database])
-        
-        if (rowCount != null && rowCount > 0) {
-            this.client.end();
-            this.client = new Client({
-                host: this.host,
-                user: this.user,
-                password: this.password,
-                port: Number(this.port),
-                database: this.database
-            });
-            await this.client.connect();
-            return;
-        }
+    /** Connect to the target database. Creates the database if it doesn't exist */
+    private async connect(): Promise<Client> {
+        if (this.client != null) return this.client;
         if (this.database == null) {
             this.logger.warn("Undefined database. Using default database postgres");
-            this.database = "postgres"
-            return
+            this.database = "postgres";
         }
-        this.logger.info(`"${this.database}" doest'n exists.`);
-        await this.client.query(`
-            CREATE DATABASE ${this.database}
-            `);
-        this.logger.info(`"${this.database}" database created`)
-        this.client.end();
-        this.client = new Client({
-            host: this.host,
-            user: this.user,
-            password: this.password,
-            port: Number(this.port),
-            database: this.database
-        });
-        await this.client.connect();
-        this.logger.info(`Using new "${this.database}" database`)
-    }
-    async init(migrationPath?: string, migrationDirection?: string) {
-        if (this.initialized) return
+        const admin = this.newClient("postgres");
+        await admin.connect();
         try {
-            await this.client.connect()
-            await this.ensureUseDatabase()
-            await this.client.query("SELECT 1");
-            this.logger.info(
-                `Using ${this.database} as database target${
-                    `${migrationDirection ? " for direction " : ""}`.concat(
-                        migrationDirection?.concat(
-                            `${migrationPath ? " and " : ""}`
-                        ) ?? ""
-                    ) + (migrationPath
-                        ? `migration: ${migrationPath.substring(
-                              migrationPath.lastIndexOf("/") + 1
-                          )}`
-                        : "")
-                }`
-            );
-        } catch (err) {
-            this.logger.warn(`Non-existing or unreachable database ${this.database}`);
-            this.logger.warn(
-                `Trying to run migration ${migrationPath?.concat(" ") ?? ""}without using any database`
-            );
+            const { rowCount } = await admin.query("SELECT 1 FROM pg_database WHERE datname = $1", [this.database]);
+            if (!rowCount) {
+                await admin.query(`CREATE DATABASE "${this.database.replace(/"/g, '""')}"`);
+                this.logger.info(`"${this.database}" database created`);
+            }
         } finally {
-            this.initialized = true
+            await admin.end();
         }
+        const client = this.newClient(this.database);
+        await client.connect();
+        this.client = client;
+        return client;
+    }
+
+    async init(migrationPath?: string, migrationDirection?: string) {
+        await this.connect();
+        this.logger.info(describeTarget(this.database, migrationPath, migrationDirection));
     }
 
     async isConnected(): Promise<boolean> {
-        return this.initialized;
+        try {
+            const client = await this.connect();
+            await client.query("SELECT 1");
+            return true;
+        } catch (err) {
+            this.logger.error(`Cannot connect to Postgres: ${err}`);
+            return false;
+        }
     }
 
-    async runSQL(sql: string, values?: Array<number | string>): Promise<any> {
+    /** Run the SQL in a transaction. Postgres DDL is transactional, so a failed migration leaves no changes */
+    async runSQL(sql: string, values?: Array<number | string>): Promise<unknown> {
+        const client = await this.connect();
         try {
-            await this.client.query("BEGIN");
-            const result = await this.client.query(sql, values ?? undefined);
-
-            await this.client.query("COMMIT");
+            await client.query("BEGIN");
+            const result = await client.query(sql, values ?? undefined);
+            await client.query("COMMIT");
             return result;
         } catch (err) {
             this.logger.error(`Postgres error during migration:\n${err}`);
-            await this.client.query("ROLLBACK").catch(() => {});
+            await client.query("ROLLBACK").catch(() => {});
             throw err;
         }
     }
 
     async close(): Promise<void> {
-        await this.client.end();
+        await this.client?.end();
+        this.client = null;
     }
 }

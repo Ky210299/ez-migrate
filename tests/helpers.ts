@@ -33,6 +33,8 @@ export interface RunResult {
     output: string;
 }
 
+type Rows = Array<Record<string, unknown>>;
+
 export interface Project {
     dir: string;
     dialect: Dialect;
@@ -46,9 +48,9 @@ export interface Project {
     /** Names of the tables in the target database (tracker table excluded) */
     tables: () => Promise<Array<string>>;
     /** Run a query in the target database and return the rows */
-    query: (sql: string) => Promise<Array<Record<string, unknown>>>;
+    query: (sql: string) => Promise<Rows>;
     /** Rows of the tracker table */
-    tracked: () => Promise<Array<Record<string, unknown>>>;
+    tracked: () => Promise<Rows>;
     cleanup: () => Promise<void>;
 }
 
@@ -63,36 +65,89 @@ function uniqueName() {
     return `ezm_${randomBytes(4).toString("hex")}`;
 }
 
-/** Create a temp project with an ez-migrate.json for the dialect. The tracker uses the same DBMS */
-export function createProject(dialect: Dialect): Project {
+/** Env vars for a database. For SQLite the database is the file path */
+function envFor(dialect: Dialect, keyPrefix: string, database: string): Record<string, string> {
+    if (dialect === "sqlite") return { [`${keyPrefix}_NAME`]: `./db/${database}.db` };
+    const conn = DB[dialect];
+    return {
+        [`${keyPrefix}_USER`]: conn.user,
+        [`${keyPrefix}_PASSWORD`]: conn.password,
+        [`${keyPrefix}_PORT`]: String(conn.port),
+        [`${keyPrefix}_HOST`]: conn.host,
+        [`${keyPrefix}_NAME`]: database,
+    };
+}
+
+function envKeys(keyPrefix: string) {
+    return {
+        user: `${keyPrefix}_USER`,
+        password: `${keyPrefix}_PASSWORD`,
+        port: `${keyPrefix}_PORT`,
+        host: `${keyPrefix}_HOST`,
+        database: `${keyPrefix}_NAME`,
+    };
+}
+
+async function queryOn(dialect: Dialect, database: string, sqliteFile: string, sql: string): Promise<Rows> {
+    if (dialect === "sqlite") {
+        const db = new DatabaseSync(sqliteFile);
+        try {
+            return db.prepare(sql).all() as Rows;
+        } finally {
+            db.close();
+        }
+    }
+    if (dialect === "mysql") {
+        const c = await createConnection({ ...DB.mysql, database });
+        try {
+            const [rows] = await c.query(sql);
+            return rows as Rows;
+        } finally {
+            await c.end();
+        }
+    }
+    const c = new Client({ ...DB.postgres, database });
+    await c.connect();
+    try {
+        return (await c.query(sql)).rows;
+    } finally {
+        await c.end();
+    }
+}
+
+async function dropDatabase(dialect: Dialect, database: string) {
+    if (dialect === "mysql") {
+        const c = await createConnection({ ...DB.mysql });
+        await c.query(`DROP DATABASE IF EXISTS ${database}`);
+        await c.end();
+    } else if (dialect === "postgres") {
+        const c = new Client({ ...DB.postgres, database: "postgres" });
+        await c.connect();
+        await c.query(`DROP DATABASE IF EXISTS ${database} WITH (FORCE)`);
+        await c.end();
+    }
+}
+
+/**
+ * Create a temp project with an ez-migrate.json for the dialect.
+ * Without trackerDialect the tracker uses the target database.
+ */
+export function createProject(dialect: Dialect, trackerDialect?: Dialect): Project {
     const dir = mkdtempSync(join(tmpdir(), `ezm-${dialect}-`));
+    mkdirSync(join(dir, "db"));
     const database = uniqueName();
-    const env: Record<string, string> = {};
+    const trackerDatabase = trackerDialect ? `${database}_tracker` : database;
+    const env: Record<string, string> = envFor(dialect, "DB", database);
     const config: Record<string, unknown> = {
         dialect,
         migrationsPath: "./migrations",
         seedsPath: "./seeds",
-        envKeys: {
-            user: "DB_USER",
-            password: "DB_PASSWORD",
-            port: "DB_PORT",
-            host: "DB_HOST",
-            database: "DB_NAME",
-        },
+        sqlitePath: "./db",
+        envKeys: envKeys("DB"),
     };
-    if (dialect === "sqlite") {
-        config.sqlitePath = "./db";
-        mkdirSync(join(dir, "db"));
-        env.DB_NAME = "./db/app.db";
-    } else {
-        const conn = DB[dialect];
-        Object.assign(env, {
-            DB_USER: conn.user,
-            DB_PASSWORD: conn.password,
-            DB_PORT: String(conn.port),
-            DB_HOST: conn.host,
-            DB_NAME: database,
-        });
+    if (trackerDialect) {
+        config.tracker = { dialect: trackerDialect, sqlitePath: "./db", envKeys: envKeys("TRACKER") };
+        Object.assign(env, envFor(trackerDialect, "TRACKER", trackerDatabase));
     }
     writeFileSync(join(dir, "ez-migrate.json"), JSON.stringify(config, null, 4));
 
@@ -123,35 +178,10 @@ export function createProject(dialect: Dialect): Project {
         return file;
     };
 
-    const query = async (sql: string): Promise<Array<Record<string, unknown>>> => {
-        if (dialect === "sqlite") {
-            const db = new DatabaseSync(join(dir, "db", "app.db"));
-            try {
-                return db.prepare(sql).all() as Array<Record<string, unknown>>;
-            } finally {
-                db.close();
-            }
-        }
-        if (dialect === "mysql") {
-            const c = await createConnection({ ...DB.mysql, database });
-            try {
-                const [rows] = await c.query(sql);
-                return rows as Array<Record<string, unknown>>;
-            } finally {
-                await c.end();
-            }
-        }
-        const c = new Client({ ...DB.postgres, database });
-        await c.connect();
-        try {
-            return (await c.query(sql)).rows;
-        } finally {
-            await c.end();
-        }
-    };
+    const query = (sql: string) => queryOn(dialect, database, join(dir, "db", `${database}.db`), sql);
 
     const tables = async () => {
-        let rows: Array<Record<string, unknown>>;
+        let rows: Rows;
         if (dialect === "sqlite") {
             rows = await query("SELECT name AS t FROM sqlite_schema WHERE type = 'table'");
         } else if (dialect === "mysql") {
@@ -164,37 +194,26 @@ export function createProject(dialect: Dialect): Project {
             );
         }
         return rows
-            .map((r) => String(r.t ?? r.T ?? r.TABLE_NAME))
+            .map((r) => String(r.t))
             .filter((t) => t !== "ez_migration")
             .sort();
     };
 
-    const tracked = async () => {
-        if (dialect === "sqlite") {
-            const db = new DatabaseSync(join(dir, "db", "tracker.db"));
-            try {
-                return db.prepare("SELECT * FROM ez_migration ORDER BY migrated_at").all() as Array<
-                    Record<string, unknown>
-                >;
-            } finally {
-                db.close();
-            }
-        }
-        return query("SELECT * FROM ez_migration ORDER BY migrated_at");
+    const tracked = () => {
+        const trackerOn = trackerDialect ?? dialect;
+        // The SQLite tracker is always <sqlitePath>/tracker.db
+        return queryOn(
+            trackerOn,
+            trackerDatabase,
+            join(dir, "db", "tracker.db"),
+            "SELECT * FROM ez_migration ORDER BY migrated_at",
+        );
     };
 
     const cleanup = async () => {
         rmSync(dir, { recursive: true, force: true });
-        if (dialect === "mysql") {
-            const c = await createConnection({ ...DB.mysql });
-            await c.query(`DROP DATABASE IF EXISTS ${database}`);
-            await c.end();
-        } else if (dialect === "postgres") {
-            const c = new Client({ ...DB.postgres, database: "postgres" });
-            await c.connect();
-            await c.query(`DROP DATABASE IF EXISTS ${database} WITH (FORCE)`);
-            await c.end();
-        }
+        await dropDatabase(dialect, database);
+        if (trackerDialect) await dropDatabase(trackerDialect, trackerDatabase);
     };
 
     return { dir, dialect, database, run, addMigration, addSeed, tables, query, tracked, cleanup };

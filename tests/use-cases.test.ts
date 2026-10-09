@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { spawnSync } from "node:child_process";
 
-import { CLI, createProject, DIALECTS, Project } from "./helpers";
+import { CLI, createProject, Dialect, DIALECTS, Project } from "./helpers";
 
 const USERS_UP = "CREATE TABLE users (id INTEGER PRIMARY KEY, name VARCHAR(50));";
 const USERS_DOWN = "DROP TABLE users;";
@@ -103,7 +103,7 @@ describe.each(DIALECTS)("%s", (dialect) => {
         it("does nothing when there are no migration files", () => {
             const r = p.run("migrate");
             expect(r.code, r.output).toBe(0);
-            expect(r.output).toMatch(/no migrations? (available|pending)|not migrations available/i);
+            expect(r.output).toMatch(/no pending migrations/i);
         });
 
         it("applies only new migrations in a new batch", async () => {
@@ -134,6 +134,44 @@ describe.each(DIALECTS)("%s", (dialect) => {
             const tracked = await p.tracked();
             expect(tracked).toHaveLength(1);
             expect(String(tracked[0].path)).toMatch(/-users\.sql$/);
+        });
+
+        it("applies a pending migration with an older name added later", async () => {
+            p.addMigration("users", USERS_UP, USERS_DOWN);
+            p.addMigration("tags", TAGS_UP, TAGS_DOWN);
+            expect(p.run("migrate").code).toBe(0);
+            // A migration created in another branch before "users" but merged after
+            const { writeFileSync } = await import("node:fs");
+            writeFileSync(
+                join(p.dir, "migrations", "2024-01-01T00:00:00.000.00000000-posts.sql"),
+                `-- ez-migration-up\n${POSTS_UP}\n-- ez-migration-up\n-- ez-migration-down\n${POSTS_DOWN}\n-- ez-migration-down\n`,
+            );
+            const r = p.run("migrate");
+            expect(r.code, r.output).toBe(0);
+            expect(await p.tables()).toEqual(["posts", "tags", "users"]);
+            expect(await p.tracked()).toHaveLength(3);
+        });
+
+        it("keeps comments and quoted text as written", async () => {
+            p.addMigration(
+                "users",
+                "-- users table\nCREATE TABLE users (id INTEGER PRIMARY KEY, url VARCHAR(50) DEFAULT 'http://a.b/#x--y');",
+                USERS_DOWN,
+            );
+            const r = p.run("migrate");
+            expect(r.code, r.output).toBe(0);
+            await p.query("INSERT INTO users (id) VALUES (1)");
+            const rows = await p.query("SELECT url FROM users");
+            expect(rows[0].url).toBe("http://a.b/#x--y");
+        });
+
+        it("only Postgres and SQLite undo a failed migration completely", async () => {
+            p.addMigration("two_tables", `${USERS_UP}\nCREATE TABLE broken (;`, "DROP TABLE users;");
+            const r = p.run("migrate");
+            expect(r.code).not.toBe(0);
+            expect(await p.tracked()).toHaveLength(0);
+            // MySQL commits each DDL statement, so the first table stays created
+            expect(await p.tables()).toEqual(dialect === "mysql" ? ["users"] : []);
         });
     });
 
@@ -169,6 +207,15 @@ describe.each(DIALECTS)("%s", (dialect) => {
             const r = p.run("down");
             expect(r.code, r.output).toBe(0);
             expect(await p.tracked()).toHaveLength(0);
+        });
+
+        it("keeps the migration tracked when its down SQL fails", async () => {
+            p.addMigration("users", USERS_UP, "DROP TABLE does_not_exist;");
+            expect(p.run("migrate").code).toBe(0);
+            const r = p.run("down");
+            expect(r.code).not.toBe(0);
+            expect(await p.tracked()).toHaveLength(1);
+            expect(await p.tables()).toEqual(["users"]);
         });
     });
 
@@ -278,10 +325,64 @@ describe.each(DIALECTS)("%s", (dialect) => {
             expect(await p.tables()).toEqual(["users"]);
         });
 
+        it("runs seeds with comments and quoted text", async () => {
+            p.addMigration("users", USERS_UP, USERS_DOWN);
+            expect(p.run("migrate").code).toBe(0);
+            p.addSeed("a", "-- demo user\nINSERT INTO users (id, name) VALUES (1, 'a--b#c'); -- trailing comment");
+            const r = p.run("seed");
+            expect(r.code, r.output).toBe(0);
+            const rows = await p.query("SELECT name FROM users");
+            expect(rows.map((x) => x.name)).toEqual(["a--b#c"]);
+        });
+
+        it("inserts nothing if one seed fails", async () => {
+            p.addMigration("users", USERS_UP, USERS_DOWN);
+            expect(p.run("migrate").code).toBe(0);
+            p.addSeed("a", "INSERT INTO users (id, name) VALUES (1, 'ana');");
+            p.addSeed("b", "INSERT INTO users (id, name) VALUES (1, 'duplicated');");
+            const r = p.run("seed");
+            expect(r.code).not.toBe(0);
+            expect(await p.query("SELECT * FROM users")).toEqual([]);
+        });
+
         it("does nothing when there are no seeds", () => {
             const r = p.run("seed");
             expect(r.code, r.output).toBe(0);
         });
+    });
+});
+
+const MIXED: Array<[Dialect, Dialect]> = [
+    ["postgres", "sqlite"],
+    ["mysql", "postgres"],
+    ["sqlite", "mysql"],
+];
+
+describe.each(MIXED)("%s target with %s tracker", (dialect, trackerDialect) => {
+    let p: Project;
+    beforeEach(() => {
+        p = createProject(dialect, trackerDialect);
+    });
+    afterEach(async () => {
+        await p.cleanup();
+    });
+
+    it("migrates, shows status and rolls back", async () => {
+        p.addMigration("users", USERS_UP, USERS_DOWN);
+        p.addMigration("posts", POSTS_UP, POSTS_DOWN);
+        let r = p.run("migrate");
+        expect(r.code, r.output).toBe(0);
+        expect(await p.tables()).toEqual(["posts", "users"]);
+        expect(await p.tracked()).toHaveLength(2);
+
+        r = p.run("status");
+        expect(r.code, r.output).toBe(0);
+        expect(r.output).toMatch(/✔ - users\.sql/);
+
+        r = p.run("rollback");
+        expect(r.code, r.output).toBe(0);
+        expect(await p.tables()).toEqual([]);
+        expect(await p.tracked()).toHaveLength(0);
     });
 });
 

@@ -65,6 +65,14 @@ export const EXPECTED_SCHEMA: Array<ColumnProperty> = [
     },
 ];
 
+/** Tracker table columns, in the order used to insert */
+export const MIGRATION_COLUMNS = ["batch_id", "migrated_at", "up", "down", "path"] as const;
+
+/** Values of a migration in the same order as MIGRATION_COLUMNS */
+export function migrationValues(m: MigrationData): Array<string | null> {
+    return [m.batchId, m.migratedAt, m.up, m.down, m.path];
+}
+
 /** Commit is a async function that does a commit to a started transaction */
 export type Commit = () => Promise<void>;
 /** Rollback is a async function that does a rollback to a started transaction */
@@ -101,28 +109,13 @@ export default class Repository {
         this.persistency = persistency;
     }
     async save(migrations: Array<MigrationData>) {
-        try {
-            return await this.persistency.save(migrations);
-        } catch (err) {
-            console.error(err);
-            process.exit("\n Error while saving the migrations registry\n");
-        }
+        return await this.persistency.save(migrations);
     }
     async removeMigrations(migrations: Array<MigrationData>) {
-        try {
-            return await this.persistency.removeMigrations(migrations);
-        } catch (err) {
-            console.error(err);
-            process.exit("\n Error while removing the migrations registry\n");
-        }
+        return await this.persistency.removeMigrations(migrations);
     }
     async removeMigration(migration: MigrationData) {
-        try {
-            return await this.persistency.removeMigration(migration);
-        } catch (err) {
-            console.error(err);
-            process.exit("\n Error while removing the migration registry\n");
-        }
+        return await this.persistency.removeMigration(migration);
     }
     async listMigrations() {
         await this.persistency.init();

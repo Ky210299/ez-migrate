@@ -6,7 +6,7 @@ export interface Connection {
     DBMSName: string;
     /** A method that returns true whether can connect to the DBMS, false otherwise */
     isConnected: () => Promise<boolean>;
-    runSQL: (sql: string) => Promise<any>;
+    runSQL: (sql: string) => Promise<unknown>;
     /** Initialize any necessary configuration of the DBMS before run the migrations */
     init: (migrationPath?: string, migrationDirection?: string) => Promise<void>;
     
@@ -56,14 +56,10 @@ class DatabaseConnector {
         await this.connection.init(migrationPath, migrationDirection);
     }
     
-    /** A method that returns true whether can connect to the DBMS, false otherwise */
+    /** Throws if it cannot connect to the DBMS */
     async testConnection() {
-        try {
-            await this.connection.isConnected();
-        } catch (err) {
-            this.consoleLogger.error(`Error connecting ${this.connection.DBMSName}: 
-                ${err}`);
-            throw ""
+        if (!(await this.connection.isConnected())) {
+            throw new Error(`Cannot connect to ${this.connection.DBMSName}`);
         }
     }
     

@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import ConfigReader from "../ConfigReader";
 import ConnectionFactory from "../ConnectionFactory";
 import MigrationExecutor from "../MigrationExecutor";
@@ -8,58 +7,30 @@ import { consoleLogger } from "../Logger";
 
 export default class Migrate {
     static consoleLogger = consoleLogger
+    /** Apply all pending migrations in one new batch */
     public static async run() {
         const config = new ConfigReader().getConfig();
-        
+        const schemaHandler = new SchemasHandler({ migrationsPath: config.migrationsPath })
         const tracker = TrackerFactory.create(config)
-        await tracker.init()
-        const lastMigration = await tracker.getLastMigrationDone()
-       
-        const { migrationsPath } = config
-        const schemaHandler = new SchemasHandler({ migrationsPath })
-       
-        const connection = ConnectionFactory.create(config);
-        const migrationExecutor = new MigrationExecutor(connection, tracker);
-       
-        if (lastMigration != null) {
-            const migrationPath = lastMigration.getDetails().path
-            const cleanName = migrationPath.substring(migrationPath.lastIndexOf("/") + 1);
-            const allNext = schemaHandler.allNextTo(cleanName);
-            
-            if (allNext.length === 0) {
-                await migrationExecutor.close()
-                Migrate.consoleLogger.info("Not migrations available")
+        try {
+            const done = await tracker.listMigrations()
+            const pending = schemaHandler.getPendingMigrations(done);
+            if (pending.length === 0) {
+                Migrate.consoleLogger.info("No pending migrations")
                 return
             }
-            const migrationWithDML = allNext.find(m => schemaHandler.hasDML(m.getDetails().up));
+            const migrationWithDML = pending.find(m => schemaHandler.hasDML(m.getDetails().up));
             if (migrationWithDML != null) {
-                await migrationExecutor.close()
-                throw new Error(`File ${migrationWithDML.getDetails().path} has DML.
-                    Migrations files cannot have DML statements. Use Seeds instead`)
+                throw new Error(`File ${migrationWithDML.getDetails().path} has DML. Migrations files cannot have DML statements. Use Seeds instead`)
             }
-            
-            await migrationExecutor.executeMigrationsUp(allNext);
-            await migrationExecutor.close()
-            return
+            const migrationExecutor = new MigrationExecutor(ConnectionFactory.create(config), tracker);
+            try {
+                await migrationExecutor.executeMigrationsUp(pending);
+            } finally {
+                await migrationExecutor.close()
+            }
+        } finally {
+            await tracker.close().catch(() => {})
         }
-        const batchId = randomUUID();
-        const migrations = schemaHandler.getAllMigrations().map(m => {
-            return schemaHandler.makeMigrationFromFile(m, batchId);
-        });
-        if (migrations.length === 0) {
-            await migrationExecutor.close()
-            Migrate.consoleLogger.info("Not migrations available")
-            return
-        }
-        
-        const migrationWithDML = migrations.find(m => schemaHandler.hasDML(m.getDetails().up));
-        if (migrationWithDML != null) {
-            await migrationExecutor.close()
-            Migrate.consoleLogger.error(`File ${migrationWithDML.getDetails().path} has DML.
-                Migrations files cannot have DML statements. Use Seeds instead`);
-            return
-        }
-        await migrationExecutor.executeMigrationsUp(migrations);
-        await migrationExecutor.close()
     }
 }

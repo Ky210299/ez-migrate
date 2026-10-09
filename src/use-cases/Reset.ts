@@ -5,19 +5,23 @@ import TrackerFactory from "../TrackerFactory"
 import Migrate from "./Migrate";
 
 export default class Reset {
+    /** Revert all migrations, newest first, and apply them again in one batch */
     public static async run() {
         const config = new ConfigReader().getConfig();
-        
         const tracker = TrackerFactory.create(config);
-        await tracker.init();
-        const migrationsDone = await tracker.listMigrations()
-        const connection = ConnectionFactory.create(config);
-        if (migrationsDone.length) {
-            const migrationExecutor = new MigrationExecutor(connection, tracker)
-            await migrationExecutor.executeMigrationsDown(migrationsDone.reverse());
-            await migrationExecutor.close()
+        try {
+            const migrationsDone = await tracker.listMigrations()
+            if (migrationsDone.length) {
+                const migrationExecutor = new MigrationExecutor(ConnectionFactory.create(config), tracker)
+                try {
+                    await migrationExecutor.executeMigrationsDown(migrationsDone.reverse());
+                } finally {
+                    await migrationExecutor.close()
+                }
+            }
+        } finally {
+            await tracker.close().catch(() => {})
         }
         await Migrate.run();
-        tracker.close()
     }
 }

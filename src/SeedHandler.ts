@@ -1,43 +1,24 @@
-import { ERRORS, isErrnoException } from "./Errors";
 import { Config } from "./types";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs"
+import { isEmptySQL, normalizeSQL } from "./sql";
 
 export default class SeedHandler {
     private readonly SEEDS_PATH: string
-    private readonly SEEDS_TEMPLATE: string = "# Type here your seed"
-    private readonly DDLRegExp = /(?:^|;)\s*(?:CREATE|ALTER|DROP|TRUNCATE|RENAME)\b/im;
-    private readonly SQLCommentsRegExp = /(--|#|\/\/).*$/gm
+    private readonly SEEDS_TEMPLATE: string = "-- Type here your seed"
+    private readonly DDLRegExp = /(?:^|;)\s*(?:CREATE|ALTER|DROP|TRUNCATE|RENAME)\b/i;
     constructor(config: Config) {
         const { seedsPath } = config
         this.SEEDS_PATH = seedsPath
-        mkdirSync(this.SEEDS_PATH)
+        mkdirSync(this.SEEDS_PATH, { recursive: true })
     }
     
     hasDDL(sql: string) {
-        return this.DDLRegExp.test(sql) 
+        return this.DDLRegExp.test(normalizeSQL(sql))
     }
-    private normalizeSQL(sql: string) {
-        const withoutComments = sql.replace(this.SQLCommentsRegExp, " ");
-        const withoutLineBreaks = withoutComments.replace(/\n/g, " ")
-        return withoutLineBreaks.replace(/\s+/g, " ");
-    }
-    private ensureSeedsPathExists() {
-        try {
-            if (this.SEEDS_PATH == null) return;
-            mkdirSync(this.SEEDS_PATH, {recursive: true});
-        } catch (err) {
-            if (isErrnoException(err)) {
-                const { errno } = err;
-                // if the path exists just return
-                if (errno === ERRORS.FILE_ALREADY_EXISTS.errno) return;
-            }
-            throw err;
-        }
-    }
+
     getSeedsFileNames() {
-        this.ensureSeedsPathExists();
-        const seeds = readdirSync(this.SEEDS_PATH, "utf8").filter((path) => path.endsWith(".sql"))
-        return seeds
+        mkdirSync(this.SEEDS_PATH, { recursive: true });
+        return readdirSync(this.SEEDS_PATH, "utf8").filter((path) => path.endsWith(".sql")).sort()
     }
     
     private addSeedsPathToSchemasName(seedsFilesNames: Array<string>): Array<string> {
@@ -49,27 +30,26 @@ export default class SeedHandler {
     }
     
     makeSeedFile(name: string) {
-        if (!name) throw new Error("Name is needed for create a new migration file");
+        if (!name) throw new Error("Name is needed for create a new seed file");
 
         const now = new Date().toISOString();
         const endWithSlash = this.SEEDS_PATH.endsWith("/");
         const path = `${this.SEEDS_PATH}${endWithSlash ? "" : "/"}${now}-${name}.sql`;
-        if (existsSync(path)) throw new Error("The migration file already exists");
+        if (existsSync(path)) throw new Error("The seed file already exists");
         writeFileSync(path, this.SEEDS_TEMPLATE);
         return path
     }
     
+    /** Returns the SQL of every seed file, in file name order. Throws if a seed has DDL */
     getSeeds() {
-        const seedsFileNames = this.getSeedsFileNames(); 
-        const withPath = this.addSeedsPathToSchemasName(seedsFileNames);
-        const sql = withPath.flatMap(path => {
+        const paths = this.addSeedsPathToSchemasName(this.getSeedsFileNames());
+        const seeds: Array<string> = [];
+        for (const path of paths) {
             const sql = readFileSync(path, "utf8");
-            if (!sql.trim()) return []
-            return this.normalizeSQL(sql);
-        })
-        sql.forEach((query, i) => {
-            if (this.hasDDL(query)) throw new Error(`File ${withPath[i]} has DDL statements`)
-        })
-        return sql
+            if (isEmptySQL(sql)) continue;
+            if (this.hasDDL(sql)) throw new Error(`File ${path} has DDL statements. Seeds can only have DML`);
+            seeds.push(sql.trim());
+        }
+        return seeds
     }
 }

@@ -3,28 +3,30 @@ import MigrationExecutor from "../MigrationExecutor";
 import ConnectionFactory from "../ConnectionFactory";
 import TrackerFactory from "../TrackerFactory";
 import { consoleLogger } from "../Logger";
+import Migration from "../Migration";
 
 /** Class for running the Down use case */
 export default class Down {
-    public static async run() {
-        const configReader = new ConfigReader();
-        const config = configReader.getConfig();
-        
-        
+    /** Revert the last migration done. Returns the reverted migration, or null if there was none */
+    public static async run(): Promise<Migration | null> {
+        const config = new ConfigReader().getConfig();
         const tracker = TrackerFactory.create(config);
-        await tracker.init();
-        
-        const lastMigration = await tracker.getLastMigrationDone();
-        if (lastMigration == null) {
-            consoleLogger.info("There is not migrations done")
-            await tracker.close()
-            return
-        };
-        
-        const connection = ConnectionFactory.create(config);
-        const migrationExecutor = new MigrationExecutor(connection, tracker);
-        
-        await migrationExecutor.executeSingleMigrationDown(lastMigration);
-        await migrationExecutor.close()
+        try {
+            await tracker.init();
+            const lastMigration = await tracker.getLastMigrationDone();
+            if (lastMigration == null) {
+                consoleLogger.info("There is not migrations done")
+                return null
+            };
+            const migrationExecutor = new MigrationExecutor(ConnectionFactory.create(config), tracker);
+            try {
+                await migrationExecutor.executeSingleMigrationDown(lastMigration);
+            } finally {
+                await migrationExecutor.close()
+            }
+            return lastMigration
+        } finally {
+            await tracker.close().catch(() => {})
+        }
     }
 }

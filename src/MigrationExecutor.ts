@@ -10,87 +10,74 @@ class MigrationExecutor {
         this.dbconnector = dbconnector;
         this.tracker = tracker;
     }
-    
-    async executeSingleMigrationUp(migration: Migration) {
-        await this.dbconnector.testConnection();
-        await this.dbconnector.initConnection(migration.getDetails().path, "UP");
-        await this.tracker.init()
-        const migrationData = migration.getDetails()
-        const { commit, rollback } = await this.tracker.save([migrationData]);
+
+    /**
+     * Track the change and run the SQL. The tracker change is committed only
+     * if the SQL succeeds.
+     */
+    private async runTracked(
+        sql: string,
+        track: () => Promise<{ commit: () => Promise<void>, rollback: () => Promise<void> }>,
+    ) {
+        const { commit, rollback } = await track();
         try {
-            await this.dbconnector.runSQL(migrationData.up);
-            await commit()
-        } catch (err) {
-            await rollback()
-            throw err;
-        }
-    }
-    async executeSingleMigrationDown(migration: Migration) {
-        await this.dbconnector.testConnection();
-        await this.dbconnector.initConnection(migration.getDetails().path, "DOWN");
-        await this.tracker.init()
-        const migrationData = migration.getDetails();
-        const { commit, rollback } = await this.tracker.removeMigration(migrationData);
-        try {
-            await this.dbconnector.runSQL(migrationData.down);
-            await commit();
+            await this.dbconnector.runSQL(sql);
         } catch (err) {
             await rollback();
+            throw err;
         }
+        await commit();
+    }
+
+    async executeSingleMigrationUp(migration: Migration) {
+        await this.executeMigrationsUp([migration]);
+    }
+
+    async executeSingleMigrationDown(migration: Migration) {
+        const migrationData = migration.getDetails();
+        await this.dbconnector.testConnection();
+        await this.dbconnector.initConnection(migrationData.path, "DOWN");
+        await this.tracker.init()
+        await this.runTracked(migrationData.down, () => this.tracker.removeMigration(migrationData));
     };
+
     async executeMigrationsUp(migrations: Array<Migration>) {
         await this.dbconnector.testConnection();
         await this.tracker.init()
-        // DDL is not transactional and autocommit after each statement, so we need to track every migration separately
+        // Some DBMS (MySQL) autocommit DDL, so every migration is run and tracked separately
         for (const m of migrations) {
             const migrationData = m.getDetails();
             await this.dbconnector.initConnection(migrationData.path, "UP");
-            const { commit, rollback } = await this.tracker.save([migrationData]);
-            try {
-                await this.dbconnector.runSQL(migrationData.up);
-                await commit()
-            } catch (err) {
-                await rollback()
-                throw err
-            }
+            await this.runTracked(migrationData.up, () => this.tracker.save([migrationData]));
         }
     }
+
+    /** Revert the migrations one by one, in the given order */
     async executeMigrationsDown(migrations: Array<Migration>) {
         await this.dbconnector.testConnection();
-        await this.dbconnector.initConnection("", "DOWN");
         await this.tracker.init()
-        const migrationsData = migrations.map(m => m.getDetails());
-        const { commit, rollback } = await this.tracker.removeMigrations(migrationsData);
-        try {
-            await this.dbconnector.runSQL(migrationsData.map(m => m.down).join(""));
-            await commit()
-        } catch (err) {
-            await rollback()
+        for (const m of migrations) {
+            const migrationData = m.getDetails();
+            await this.dbconnector.initConnection(migrationData.path, "DOWN");
+            await this.runTracked(migrationData.down, () => this.tracker.removeMigration(migrationData));
         }
     }
+
+    /** Revert a batch of migrations. All must have the same batch id */
     async executeBatchDown(migrations: Array<Migration>) {
         if (migrations.length === 0) throw new Error("No migration for execute down");
-        await this.dbconnector.testConnection();
-        await this.dbconnector.initConnection();
         const migrationsData = migrations.map(m => m.getDetails());
         const { batchId } = migrationsData[0];
         if (!batchId) throw new Error("Invalid batch id");
         if (!migrationsData.every(m => m.batchId === batchId)) throw new Error("All migrations doesn't have the same batch id")
-        const { commit, rollback } = await this.tracker.removeMigrations(migrationsData);
-        try {
-            await this.dbconnector.runSQL(migrationsData.map(m => m.down).join(""));
-            await commit()
-        } catch (err) {
-            await rollback()
-        }
+        await this.executeMigrationsDown(migrations);
     }
     
     /**
      * Close the tracker and connection
     */
     async close() {
-        await this.dbconnector.close()
-        await this.tracker.close()
+        await Promise.allSettled([this.dbconnector.close(), this.tracker.close()]);
     }
 }
 
