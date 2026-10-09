@@ -42,7 +42,7 @@ pnpm run db:down    # stop the databases
 
 - Semantic Versioning: MAJOR.MINOR.PATCH. Breaking change: MAJOR (MINOR while < 1.0.0). New feature: MINOR. Fix: PATCH.
 - Every change adds an entry to `CHANGELOG.md` under `## [Unreleased]` (Added, Changed, Fixed, Removed).
-- On release, rename `[Unreleased]` to the new version with the date and bump `package.json`.
+- On release, rename `[Unreleased]` to the new version with the date and bump `package.json`, merge, then push the tag `vX.Y.Z` on main. `.github/workflows/release.yml` tests and publishes to npm.
 - Keep the README section "Advantages, disadvantages and use cases" up to date with what you learn.
 - Markdown files written for agents go in `.github/`, not in the repository root.
 
