@@ -15,6 +15,26 @@ export const TRACKER_SCHEMA = `
         PRIMARY KEY (batch_id, migrated_at)
     )
     `.trim();
+/** Table with the seed files already run */
+export const SEED_TABLE_NAME = "ez_seed";
+export const SEED_TRACKER_SCHEMA = `
+    CREATE TABLE IF NOT EXISTS ${SEED_TABLE_NAME} (
+        name VARCHAR(255) NOT NULL PRIMARY KEY,
+        seeded_at CHAR(32) NOT NULL
+    )
+    `.trim();
+
+/** SQL statements to record seeds as run. Replaces the rows of seeds that were run before */
+export function saveSeedsStatements(names: Array<string>, seededAt: string, placeholder: (i: number) => string) {
+    const deleteSQL = `DELETE FROM ${SEED_TABLE_NAME} WHERE name IN (${names.map((_, i) => placeholder(i + 1)).join(",")})`;
+    let idx = 1;
+    const insertSQL = `INSERT INTO ${SEED_TABLE_NAME} (name, seeded_at) VALUES ${names.map(() => `(${placeholder(idx++)},${placeholder(idx++)})`).join(",")}`;
+    return [
+        { sql: deleteSQL, values: names },
+        { sql: insertSQL, values: names.flatMap(name => [name, seededAt]) },
+    ];
+}
+
 type ColumnProperty = {
     name: string,
     type: TranslatableKeyword,
@@ -97,6 +117,11 @@ export interface Persistency {
     /** Return the last migration done if exists, null otherwise */
     getLastMigrationDone: () => Promise<Migration | null>;
     getLastBatchMigrationDone: () => Promise<Array<Migration> | null>
+
+    /** Names of the seed files already run */
+    listSeeds: () => Promise<Array<string>>
+    /** Begins a transaction that records the seeds as run and returns the commit and rollback functions */
+    saveSeeds: (names: Array<string>, seededAt: string) => Promise<{ commit: Commit; rollback: Rollback }>
     
     init: () => Promise<void>
     close: () => Promise<void>
@@ -128,6 +153,14 @@ export default class Repository {
         return await this.persistency.getLastBatchMigrationDone();
     }
     
+    async listSeeds() {
+        await this.persistency.init();
+        return await this.persistency.listSeeds();
+    }
+    async saveSeeds(names: Array<string>, seededAt: string) {
+        return await this.persistency.saveSeeds(names, seededAt);
+    }
+
     async init() {
         await this.persistency.init()
     }

@@ -1,7 +1,7 @@
 import sqlite from "node:sqlite";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
-import { Persistency, TRACKER_SCHEMA, Commit, Rollback, TABLE_NAME, MIGRATION_COLUMNS, migrationValues } from "./Repository.js";
+import { Persistency, TRACKER_SCHEMA, Commit, Rollback, TABLE_NAME, MIGRATION_COLUMNS, migrationValues, SEED_TABLE_NAME, SEED_TRACKER_SCHEMA, saveSeedsStatements } from "./Repository.js";
 import Migration, { MigrationData } from "./Migration.js";
 
 import type { DatabaseSync } from "node:sqlite";
@@ -45,12 +45,13 @@ export default class SqlitePersistency implements Persistency {
         mkdirSync(trackerPath, { recursive: true });
         this.db = new sqlite.DatabaseSync(join(trackerPath, "tracker.db"));
         this.checkSchema()
+        this.db.exec(SEED_TRACKER_SCHEMA)
     }
     async init() {
     }
 
     /** Begins a transaction, runs the statement and returns the commit and rollback functions */
-    private async inTransaction(sql: string, values: Array<string | null>, action: string) {
+    private async inTransaction(statements: Array<{ sql: string, values: Array<string | null> }>, action: string) {
         this.db.exec("BEGIN TRANSACTION");
         const commit: Commit = async () => {
             this.db.exec("COMMIT")
@@ -60,7 +61,7 @@ export default class SqlitePersistency implements Persistency {
             consoleLogger.warn(`SQLite tracker rollback successfuly at ${action}`)
         }
         try {
-            this.db.prepare(sql).run(...values);
+            for (const { sql, values } of statements) this.db.prepare(sql).run(...values);
         } catch (err) {
             await rollback();
             throw new Error(`Error tracking the migration: ${err}`);
@@ -73,18 +74,18 @@ export default class SqlitePersistency implements Persistency {
             .map(() => "(" + MIGRATION_COLUMNS.map(() => "?").join(",") + ")")
             .join(",");
         const sql = `INSERT INTO ${this.MIGRATION_TABLE} (${MIGRATION_COLUMNS.join(",")}) VALUES ${placeholders}`;
-        return this.inTransaction(sql, migrations.flatMap(migrationValues), "save migration");
+        return this.inTransaction([{ sql, values: migrations.flatMap(migrationValues) }], "save migration");
     }
     
     async removeMigrations(migrations: Array<MigrationData>) {
         const placeholders = migrations.map(() => "?").join(",")
         const sql = `DELETE FROM ${TABLE_NAME} WHERE migrated_at IN (${placeholders})`
-        return this.inTransaction(sql, migrations.map(m => m.migratedAt), "remove migrations");
+        return this.inTransaction([{ sql, values: migrations.map(m => m.migratedAt) }], "remove migrations");
     }
     
     async removeMigration(migration: MigrationData) {
         const sql = `DELETE FROM ${TABLE_NAME} WHERE migrated_at = ?`
-        return this.inTransaction(sql, [migration.migratedAt], "remove migration");
+        return this.inTransaction([{ sql, values: [migration.migratedAt] }], "remove migration");
     }
 
     async list() {
@@ -108,6 +109,15 @@ export default class SqlitePersistency implements Persistency {
         if (rows.length === 0) return null;
         return rows.map(toMigration)
     }
+    async listSeeds(): Promise<Array<string>> {
+        const rows = this.db.prepare(`SELECT name FROM ${SEED_TABLE_NAME} ORDER BY name`).all() as unknown as Array<{ name: string }>;
+        return rows.map(r => r.name);
+    }
+
+    async saveSeeds(names: Array<string>, seededAt: string) {
+        return this.inTransaction(saveSeedsStatements(names, seededAt, () => "?"), "save seeds");
+    }
+
     async close() {
         this.db.close()
     }

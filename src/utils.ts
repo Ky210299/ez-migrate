@@ -52,3 +52,17 @@ export function describeTarget(database: string | undefined, migrationPath?: str
   if (migrationPath) text += `${direction ? " and" : ""} migration: ${migrationPath.substring(migrationPath.lastIndexOf("/") + 1)}`;
   return text;
 }
+
+/**
+ * Timestamp for new file names: YYYYMMDDHHmmssSSS in UTC. Has no ":" so the
+ * names are valid on Windows, and sorts after the old ISO names
+ * (2025-01-01T...), so existing files keep running first.
+ */
+export function fileTimestamp(date: Date = new Date()) {
+  return date.toISOString().replace(/[-:T.Z]/g, "");
+}
+
+/** Removes the timestamp prefix of a migration or seed file name (new and old formats) */
+export function stripTimestamp(name: string) {
+  return name.replace(/^(\d{17}|\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+(\.\d+)?Z?)-/, "");
+}

@@ -8,6 +8,18 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-10-09
+
+### Added
+- Seeds are recorded in a new tracker table `ez_seed`. `seed` runs only the seed files not run yet, so it is safe to run on every deploy.
+- `seed --all` runs every seed file again.
+- `seed --fake` records the pending seeds as run without running them (for data that is already in the database).
+- `status` also lists the seed files: `✔` run, `✘` pending.
+
+### Changed
+- **Upgrade note:** `seed` no longer runs files that already ran. The first `seed` after upgrading runs every file once more, because no seed is recorded yet. If your seeds already ran, run `ez-migrate seed --fake` once after upgrading.
+- New migration and seed files are named `YYYYMMDDHHmmssSSS-name.sql` (UTC). The old names had `:`, which Windows does not allow. Old files keep working and still run first, because the new names sort after them.
+
 ## [0.5.0] - 2026-10-09
 
 ### Added

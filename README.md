@@ -74,7 +74,7 @@ DROP TABLE users;
 - The SQL between the two `-- ez-migration-up` lines applies the change.
 - The SQL between the two `-- ez-migration-down` lines reverts it.
 - Both sections are required and can have several statements.
-- Files run in file name order. The timestamp prefix keeps the creation order.
+- Files run in file name order. The timestamp prefix (`YYYYMMDDHHmmssSSS`, UTC) keeps the creation order.
 - Migrations can't have DML (`INSERT`, `UPDATE`, `DELETE`). Use seeds for data.
 - The SQL is sent to the database as written, so it must be valid for your DBMS.
 
@@ -88,8 +88,10 @@ INSERT INTO users (id, name) VALUES (2, 'bob');
 ```
 
 - Seeds can't have DDL (`CREATE`, `ALTER`, `DROP`, `TRUNCATE`, `RENAME`).
-- `ez-migrate seed` runs all seed files, in file name order, in one transaction. If one fails, nothing is inserted.
-- Seeds are not tracked. Running `seed` twice runs every file twice.
+- `ez-migrate seed` runs the seed files **not run yet**, in file name order, in one transaction. If one fails, nothing is inserted and nothing is recorded.
+- Run seeds are recorded in the table `ez_seed`, so running `seed` again only runs new files. It is safe to run it on every deploy.
+- `seed --all` runs every seed file again. Your SQL must handle data that already exists (for example `DELETE` first, or `INSERT ... ON CONFLICT DO NOTHING`).
+- `seed --fake` records the pending seeds as run without running them. Use it when the data is already in the database.
 
 Add `-e` to `make` to open the new file in `$EDITOR`.
 
@@ -170,8 +172,8 @@ By default the history is stored in the table `ez_migration` of the target datab
 | `rollback` | Reverts all migrations of the last batch, newest first. |
 | `redo` | Reverts the last migration and applies the same file again. |
 | `reset` | Reverts all applied migrations, newest first, then runs `migrate`. |
-| `status` | Lists the migration files: `✔` applied, `✘` pending, `⚠️` applied but the file changed after. Also `list` or no command. |
-| `seed` | Runs all seed files in one transaction. |
+| `status` | Lists the migration files (`✔` applied, `✘` pending, `⚠️` applied but the file changed after) and the seed files (`✔` run, `✘` pending). Also `list` or no command. |
+| `seed` | Runs the seed files not run yet, in one transaction. `-a, --all` runs all again. `--fake` records them without running them. |
 | `version` | Prints the version. Also `-v, --version`. |
 
 The CLI exits with code `0` on success and `1` on any error, so it can stop a deploy script or CI job.
@@ -181,6 +183,7 @@ The CLI exits with code `0` on success and `1` on any error, so it can stop a de
 ## How tracking works
 
 - Each applied migration is a row in the table `ez_migration`: batch id, time, the up and down SQL, and the file path.
+- Each run seed file is a row in the table `ez_seed`: file name and time. Both tables are in the tracker database.
 - A **pending** migration is a file whose name is not in the table. A file with an older name added later (for example after a merge) is also applied.
 - `down`, `rollback` and `reset` use the **down SQL saved in the table**, not the current file. Editing a file after applying it does not change how it is reverted.
 - Each migration is applied and tracked on its own. If migration 3 of 5 fails, migrations 1 and 2 stay applied and tracked, and the command stops with code `1`.
@@ -192,7 +195,7 @@ The CLI exits with code `0` on success and `1` on any error, so it can stop a de
 ## Advantages, disadvantages and use cases
 
 This section is updated with each version, based on what the tests and real use show.
-*Last review: 0.5.0.*
+*Last review: 0.6.0.*
 
 ### Advantages
 
@@ -203,6 +206,7 @@ This section is updated with each version, based on what the tests and real use 
 - **Flexible tracker.** The history can live in the same database, in a SQLite file, or in another server and DBMS.
 - **Schema and data are separated.** Migrations reject DML and seeds reject DDL, so data scripts don't hide in schema changes.
 - **Detects edited migrations.** `status` marks applied files that changed after being applied.
+- **Seeds run once.** `seed` only runs new seed files, so it can run on every deploy.
 - **Works with branches.** Migrations merged later with an older name are still applied.
 - **Script friendly.** Exit code `1` on errors.
 
@@ -210,11 +214,10 @@ This section is updated with each version, based on what the tests and real use 
 
 - **MySQL migrations are not atomic.** A migration with several DDL statements can be left half applied. See [How tracking works](#how-tracking-works).
 - **No data migrations.** You can't run an `UPDATE` to fill a new column inside a migration. You need a seed or a separate script.
-- **Seeds are not tracked.** Running `seed` twice inserts the data twice unless your SQL avoids it (`INSERT ... ON CONFLICT DO NOTHING`, `INSERT IGNORE`).
+- **Edited seeds don't run again.** A seed is recorded by file name. If you change a seed that already ran, create a new seed file or use `seed --all`.
 - **No lock.** Two `migrate` commands at the same time against the same database can both run the same migration. Run migrations from one place only.
 - **SQL is not portable.** A migration written for PostgreSQL may not run on MySQL.
 - **Limited connection options.** Only host, port, user, password and database from env vars. No connection URL and no SSL options yet, so some managed cloud databases that require SSL may not work.
-- **Windows:** generated file names contain `:`, which Windows does not allow. Use WSL or rename the files.
 - **CLI only.** There is no JavaScript API to run migrations from code.
 - **Needs Node.js 22.13+**.
 
