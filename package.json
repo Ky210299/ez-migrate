@@ -1,7 +1,7 @@
 {
     "name": "@ky210299/ez-migrate",
-    "version": "0.4.0",
-    "description": "A easy library for make SQL migrations",
+    "version": "0.5.0",
+    "description": "Lightweight CLI for SQL migrations and seeds written in plain .sql files (MySQL, PostgreSQL, SQLite)",
     "main": "dist/ez-migrate.js",
     "bin": {
         "ez-migrate": "dist/ez-migrate.js"
@@ -10,8 +10,12 @@
         "access": "public"
     },
     "scripts": {
-        "test": "echo \"Error: no test specified\" && exit 1",
-        "build": "pnpm exec tsc"
+        "build": "pnpm exec tsc",
+        "test": "pnpm run build && vitest run",
+        "test:watch": "vitest",
+        "db:up": "docker compose up -d --wait",
+        "db:down": "docker compose down",
+        "lint": "eslint src/"
     },
     "keywords": [
         "migrations",
@@ -35,6 +39,14 @@
         "@types/pg": "^8.15.2",
         "eslint": "^9.24.0",
         "typescript": "^5.8.3",
-        "typescript-eslint": "^8.29.0"
+        "typescript-eslint": "^8.29.0",
+        "vitest": "^3"
+    },
+    "engines": {
+        "node": ">=22.13"
+    },
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/Ky210299/ez-migrate.git"
     }
 }

@@ -16,3 +16,7 @@ migrations/
 
 dist/**/*.map
 
+
+.github/
+docker-compose.yml
+vitest.config.mts

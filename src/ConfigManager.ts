@@ -1,7 +1,6 @@
 import { CONFIG_PATH, DEFAULT_CONFIG } from "./constants"
 import { existsSync, writeFileSync } from "node:fs"
 import { MigrateError } from "./Errors";
-import { consoleLogger } from "./Logger";
 
 /** Class for modify and create the configuration file */
 export default class ConfigManager {
@@ -11,12 +10,14 @@ export default class ConfigManager {
         return existsSync(path ?? CONFIG_PATH);
     }
     
-    /** Make the config file */
+    /**
+     * Make the config file. It has no "tracker" key, so the migrations are
+     * tracked in the target database until the user adds one.
+     */
     static initConfig(path: string = CONFIG_PATH) {
-        if (this.existsConfig(path)) {
-            consoleLogger.info("Config Already exists");
-            throw new MigrateError("Config Already exists");
-        }
-        writeFileSync(path, JSON.stringify(DEFAULT_CONFIG, null, 4), "utf-8")
+        if (this.existsConfig(path)) throw new MigrateError("Config Already exists");
+        const { dialect, migrationsPath, seedsPath, sqlitePath, envKeys } = DEFAULT_CONFIG;
+        const config = { dialect, migrationsPath, seedsPath, sqlitePath, envKeys };
+        writeFileSync(path, JSON.stringify(config, null, 4) + "\n", "utf-8")
     }
 }

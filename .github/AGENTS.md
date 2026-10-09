@@ -18,20 +18,33 @@ npm run build
 npx tsc --noEmit
 
 # Linting
-npx eslint src/
+pnpm run lint
 ```
 
 ## Testing
 
-Currently, this project does not have formal test suites configured. The package.json test script is a placeholder. To run tests once implemented:
+Integration tests run the built CLI against real databases. MySQL and Postgres run in
+containers (`docker-compose.yml`); SQLite uses files in a temp folder.
 
 ```bash
-# Run all tests (when implemented)
-pnpm test
-
-# Run single test (when implemented)
-# Pattern will depend on test framework choice
+pnpm run db:up      # start MySQL (port 33306) and Postgres (port 55432)
+pnpm test           # build + run all tests (Vitest)
+pnpm exec vitest run -t "postgres > migrate"   # run a subset by name
+pnpm run db:down    # stop the databases
 ```
+
+- Tests live in `tests/`. `tests/helpers.ts` creates a temp project per test with its own database.
+- Every use case is tested against every dialect with `describe.each(DIALECTS)`.
+- A new feature or bug fix needs a test that fails without the change.
+- CI (`.github/workflows/test.yml`) runs lint and the full suite on every push and PR.
+
+## Versioning and changelog
+
+- Semantic Versioning: MAJOR.MINOR.PATCH. Breaking change: MAJOR (MINOR while < 1.0.0). New feature: MINOR. Fix: PATCH.
+- Every change adds an entry to `CHANGELOG.md` under `## [Unreleased]` (Added, Changed, Fixed, Removed).
+- On release, rename `[Unreleased]` to the new version with the date and bump `package.json`.
+- Keep the README section "Advantages, disadvantages and use cases" up to date with what you learn.
+- Markdown files written for agents go in `.github/`, not in the repository root.
 
 ## Code Style Guidelines
 
@@ -122,9 +135,9 @@ export default class Make {
 ## Development Workflow
 
 1. Make changes to TypeScript files in `src/`
-2. Run build command: `pnpm run build`
-3. Run linting: `npx eslint src/`
-4. Test commands manually using the built CLI
+2. Add or update tests in `tests/`
+3. Run `pnpm run lint` and `pnpm test` (with `pnpm run db:up` running)
+4. Add the change to `CHANGELOG.md`
 
 ## Package Manager
 

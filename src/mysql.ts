@@ -1,10 +1,11 @@
-import { createPool } from "mysql2/promise";
+import { createConnection, createPool } from "mysql2/promise";
 import type { PoolOptions, Pool } from "mysql2/promise";
 import { MySQLConnection } from "./DatabaseConnector.js";
-import { consoleLogger, ConsoleLoggerImpl } from "./Logger.js";
+import { ConsoleLoggerImpl } from "./Logger.js";
+import { describeTarget } from "./utils.js";
 
 export default class MysqlConnection implements MySQLConnection {
-    private readonly pool: Pool;
+    private pool: Pool | null = null;
     readonly DBMSName: string = "mysql";
     readonly host: string;
     readonly user: string;
@@ -19,75 +20,78 @@ export default class MysqlConnection implements MySQLConnection {
         this.port = port ?? 3306;
         this.database = database;
         this.logger = logger
-        
-        this.pool = createPool({
+    }
+
+    /** Returns a pool connected to the target database. Creates the database if it doesn't exist */
+    private async getPool(): Promise<Pool> {
+        if (this.pool != null) return this.pool;
+        const options = {
             host: this.host,
             user: this.user,
             password: this.password,
-            port: this.port,
+            port: Number(this.port),
+        };
+        if (this.database != null) {
+            const connection = await createConnection(options);
+            try {
+                const [result] = await connection.query(
+                    `CREATE DATABASE IF NOT EXISTS \`${this.database.replace(/`/g, "``")}\``,
+                ) as unknown as [{ warningStatus: number }];
+                if (result.warningStatus === 0) this.logger.info(`Database ${this.database} created`);
+            } finally {
+                await connection.end();
+            }
+        } else {
+            this.logger.warn("Undefined database. Running the migrations without selecting a database");
+        }
+        this.pool = createPool({
+            ...options,
+            database: this.database,
             multipleStatements: true,
             connectionLimit: 1,
         });
+        return this.pool;
     }
+
     async init(migrationPath?: string, migrationDirection?: string) {
-        try {
-            await this.existsDatabase(this.pool, this.database ?? null)
-            this.logger.info(`Using ${this.database} as database target${`${migrationDirection ? " for direction " : ""}`.concat(migrationDirection?.concat(`${migrationPath ? " and " : ""}`) ?? "")}${migrationPath ? `migration: ${migrationPath.substring(migrationPath.lastIndexOf("/") + 1)}` : ""}`)
-        } catch (err) {
-            this.logger.warn(`Trying to run migration ${migrationPath?.concat(" ") ?? ""}whihout use any database`);
-        }
+        await this.getPool();
+        this.logger.info(describeTarget(this.database, migrationPath, migrationDirection));
     }
-    async existsDatabase(pool: Pool, database: string | null) {
-        let connection;
-        try {
-            connection = await pool.getConnection();
-            await connection.query(`USE ${database}`);
-            return database
-        } catch (err) {
-            if (database != null && connection != null) {
-                await connection.query(`
-                        CREATE DATABASE ${database};
-                        USE ${database}
-                    `);
-                consoleLogger.info(`Database ${database} created`);
-                return
-            }
-            throw err
-        } finally {
-            connection?.release();
-        }
-    }
+
     async isConnected(): Promise<boolean> {
-        let connection;
         try {
-            connection = await this.pool.getConnection();
-            await connection.query("SELECT 'MySQL connected successfuly!'");
+            const pool = await this.getPool();
+            await pool.query("SELECT 1");
             return true;
         } catch (err) {
-            console.error("Error connecting with mysql:\n", err);
+            this.logger.error(`Cannot connect to MySQL: ${err}`);
             return false;
-        } finally {
-            connection?.release();
         }
     }
-    async runSQL(sql: string, values?: Array<number | string>): Promise<any> {
-        let connection;
+
+    /**
+     * Run the SQL in a transaction. MySQL commits DDL (CREATE, ALTER, DROP...) implicitly,
+     * so only DML (seeds) can be rolled back.
+     */
+    async runSQL(sql: string, values?: Array<number | string>): Promise<unknown> {
+        const pool = await this.getPool();
+        const connection = await pool.getConnection();
         try {
-            connection = await this.pool.getConnection();
             await connection.beginTransaction();
             const result = await connection.query(sql, values ?? undefined);
             await connection.commit();
             return result;
         } catch (err) {
             this.logger.error(`MySQL error doing migration:\n${err}`);
-            await connection?.rollback();
+            await connection.rollback();
             throw err
         } finally {
-            connection?.release();
+            connection.release();
         }
     }
     
     async close() {
-        await this.pool.end()
+        await this.pool?.end()
+        this.pool = null;
     }
 }

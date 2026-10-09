@@ -1,5 +1,7 @@
 import sqlite from "node:sqlite";
-import { Persistency, TRACKER_SCHEMA, Commit, Rollback, TABLE_NAME } from "./Repository.js";
+import { mkdirSync } from "node:fs";
+import { join } from "node:path";
+import { Persistency, TRACKER_SCHEMA, Commit, Rollback, TABLE_NAME, MIGRATION_COLUMNS, migrationValues } from "./Repository.js";
 import Migration, { MigrationData } from "./Migration.js";
 
 import type { DatabaseSync } from "node:sqlite";
@@ -11,15 +13,12 @@ type DBMigrationData =
     { batch_id: MigrationData["batchId"], migrated_at: MigrationData["migratedAt"] };
 type SqlitePersistencyArguments = { trackerPath: string };
 
+function toMigration(m: DBMigrationData) {
+    return new Migration({ ...m, batchId: m.batch_id, migratedAt: m.migrated_at });
+}
+
 export default class SqlitePersistency implements Persistency {
     private readonly MIGRATION_TABLE = TABLE_NAME;
-    private readonly MIGRATION_COLUMNS = {
-        BATCH_ID: "batch_id",
-        MIGRATED_AT: "migrated_at",
-        UP: "up",
-        DOWN: "down",
-        PATH: "path",
-    };
     private readonly db: DatabaseSync;
     
     private checkSchema() {
@@ -30,160 +29,84 @@ export default class SqlitePersistency implements Persistency {
                 name = '${this.MIGRATION_TABLE}'
         `);
         const currentSchema = query.get();
+        // SQLite stores the CREATE TABLE statement without "IF NOT EXISTS"
+        const normalize = (sql: unknown) => String(sql).replace(/IF NOT EXISTS/i, "").replace(/\s+/g, " ").trim();
 
         if (currentSchema == null) this.db.exec(TRACKER_SCHEMA);
-        else if (currentSchema.sql !== TRACKER_SCHEMA) {
+        else if (normalize(currentSchema.sql) !== normalize(TRACKER_SCHEMA)) {
             throw new Error(
                 `Invalid Schema:\ncurrent: ${currentSchema.sql}\nvs\nneeded: ${TRACKER_SCHEMA}`,
             );
         }
     }
 
+    /** Stores the tracker in <trackerPath>/tracker.db */
     constructor({ trackerPath }: SqlitePersistencyArguments) {
-        const path = `${trackerPath}${trackerPath.endsWith("/") ? "" : "/"}tracker.db`
-        this.db = new sqlite.DatabaseSync(path);
+        mkdirSync(trackerPath, { recursive: true });
+        this.db = new sqlite.DatabaseSync(join(trackerPath, "tracker.db"));
         this.checkSchema()
     }
     async init() {
-        
     }
-    async save(migrations: Array<MigrationData>) {
+
+    /** Begins a transaction, runs the statement and returns the commit and rollback functions */
+    private async inTransaction(sql: string, values: Array<string | null>, action: string) {
         this.db.exec("BEGIN TRANSACTION");
-        const columns = Object.values(this.MIGRATION_COLUMNS);
-
-        const placeholders = new Array(migrations.length)
-            .fill("(" + new Array(columns.length).fill("?").join(",") + ")")
-            .join(",");
-
-        const insert = this.db.prepare(`
-            INSERT INTO ${this.MIGRATION_TABLE} (${columns.join(",")})
-            VALUES ${placeholders}
-            `);
-
-        const values = migrations.flatMap((m) => Object.values(m));
-
-        if (values.length !== migrations.length * columns.length) {
-            throw new Error("Mismatch in values and placeholders count");
-        }
-
-        // Returns commit or rollback function that will be used
-        // when the migration is done successfuly (commit) or not (rollback)
         const commit: Commit = async () => {
             this.db.exec("COMMIT")
         };
         const rollback: Rollback = async () => {
             this.db.exec("ROLLBACK");
-            consoleLogger.warn("sqlite tracker rollback successfuly")
+            consoleLogger.warn(`SQLite tracker rollback successfuly at ${action}`)
         }
-
         try {
-            insert.run(...values);
+            this.db.prepare(sql).run(...values);
         } catch (err) {
-            console.error(err);
-            throw new Error("Error tracking migration");
-        } finally {
-            return { commit, rollback };
+            await rollback();
+            throw new Error(`Error tracking the migration: ${err}`);
         }
+        return { commit, rollback };
+    }
+
+    async save(migrations: Array<MigrationData>) {
+        const placeholders = migrations
+            .map(() => "(" + MIGRATION_COLUMNS.map(() => "?").join(",") + ")")
+            .join(",");
+        const sql = `INSERT INTO ${this.MIGRATION_TABLE} (${MIGRATION_COLUMNS.join(",")}) VALUES ${placeholders}`;
+        return this.inTransaction(sql, migrations.flatMap(migrationValues), "save migration");
     }
     
     async removeMigrations(migrations: Array<MigrationData>) {
-        this.db.exec("BEGIN TRANSACTION");
-        const placeholders = new Array(migrations.length).fill("?").join(",")
-        const values = migrations.map(m => m.migratedAt);
-        const sql = `
-                DELETE FROM ${TABLE_NAME} WHERE
-                ${this.MIGRATION_COLUMNS.MIGRATED_AT} IN (${placeholders})
-        `
-        const q = this.db.prepare(sql)
-        
-        // Returns commit or rollback function that will be used
-        // when the migration is done successfuly (commit) or not (rollback)
-        const commit: Commit = async () => {
-            this.db.exec("COMMIT")
-        };
-        const rollback: Rollback = async () => {
-            this.db.exec("ROLLBACK");
-            consoleLogger.warn("Rollback tracker successfuly")
-        }
-        try {
-            q.run(...values);
-        } catch (err) {
-            console.error(err);
-            throw new Error("Error tracking the migration")
-        } finally {
-            return { commit, rollback };
-        }
-    }
-    
-    async list() {
-        const query = this.db.prepare(`
-            SELECT * FROM ${this.MIGRATION_TABLE};
-            `);
-        const migrations = query.all() as unknown as Array<DBMigrationData>;
-        return migrations.map(m => new Migration({
-            ...m,
-            batchId: m.batch_id,
-            migratedAt: m.migrated_at,
-        }));
+        const placeholders = migrations.map(() => "?").join(",")
+        const sql = `DELETE FROM ${TABLE_NAME} WHERE migrated_at IN (${placeholders})`
+        return this.inTransaction(sql, migrations.map(m => m.migratedAt), "remove migrations");
     }
     
     async removeMigration(migration: MigrationData) {
-        this.db.exec("BEGIN TRANSACTION");
-        const sql = `
-                DELETE FROM ${TABLE_NAME} WHERE
-                ${this.MIGRATION_COLUMNS.MIGRATED_AT} = ?
-        `
-        const q = this.db.prepare(sql)
-        
-        // Returns commit or rollback function that will be used
-        // when the migration is done successfuly (commit) or not (rollback)
-        const commit: Commit = async () => {
-            this.db.exec("COMMIT")
-        };
-        const rollback: Rollback = async () => {
-            this.db.exec("ROLLBACK");
-            consoleLogger.warn("Rollback tracker successfuly")
-        }
-        try {
-            q.run(migration.migratedAt);
-        } catch (err) {
-            console.error(err);
-            throw new Error("Error tracking the migration")
-        } finally {
-            return { commit, rollback };
-        }
+        const sql = `DELETE FROM ${TABLE_NAME} WHERE migrated_at = ?`
+        return this.inTransaction(sql, [migration.migratedAt], "remove migration");
+    }
+
+    async list() {
+        const rows = this.db.prepare(`SELECT * FROM ${this.MIGRATION_TABLE} ORDER BY migrated_at`).all();
+        return (rows as unknown as Array<DBMigrationData>).map(toMigration);
     }
 
     async getLastMigrationDone() {
-        const query = this.db.prepare(`
-                SELECT * FROM ${TABLE_NAME} 
-                ORDER BY ${this.MIGRATION_COLUMNS.MIGRATED_AT} DESC LIMIT 1
-            `);
-        const migrationData = query.get() as DBMigrationData
-        return migrationData != null ? new Migration({
-            ...migrationData,
-            migratedAt: migrationData.migrated_at,
-            batchId: migrationData.batch_id
-        }) : null;
+        const row = this.db.prepare(`SELECT * FROM ${TABLE_NAME} ORDER BY migrated_at DESC LIMIT 1`).get();
+        return row != null ? toMigration(row as unknown as DBMigrationData) : null;
     }
     
     async getLastBatchMigrationDone() {
-        const query = this.db.prepare(`
+        const rows = this.db.prepare(`
                 SELECT * FROM ${TABLE_NAME}
-                WHERE ${this.MIGRATION_COLUMNS.BATCH_ID} = (
-                    SELECT ${this.MIGRATION_COLUMNS.BATCH_ID} FROM ${TABLE_NAME} 
-                    ORDER BY ${this.MIGRATION_COLUMNS.MIGRATED_AT} DESC LIMIT 1
+                WHERE batch_id = (
+                    SELECT batch_id FROM ${TABLE_NAME} ORDER BY migrated_at DESC LIMIT 1
                 )
-                ORDER BY ${this.MIGRATION_COLUMNS.MIGRATED_AT} DESC
-            `);
-        const migrationsData = query.all() as DBMigrationData[]
-        if (migrationsData.length === 0) return null;
-        
-        return migrationsData.map(m => new Migration({
-            ...m,
-            migratedAt: m.migrated_at,
-            batchId: m.batch_id
-        }))
+                ORDER BY migrated_at DESC
+            `).all() as unknown as Array<DBMigrationData>;
+        if (rows.length === 0) return null;
+        return rows.map(toMigration)
     }
     async close() {
         this.db.close()
