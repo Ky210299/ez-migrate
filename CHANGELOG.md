@@ -8,6 +8,20 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-10-09
+
+### Added
+- `ez-migrate baseline` to adopt ez-migrate on an existing database. It reads the schema (tables, columns, keys, indexes, views, and PostgreSQL enums) and writes it as one migration file. The migration is marked as applied without running it, because the database already has that schema. Running `migrate` on an empty database then creates the same schema.
+- `baseline --data` also writes the current rows as one seed file (`INSERT` statements, in foreign key order) and marks it as run. On PostgreSQL the seed also moves the `serial` and identity sequences to the max id.
+- `baseline --name <name>` sets the file name (default `baseline`).
+- Triggers, functions, procedures and standalone sequences are not exported. `baseline` lists them so you can add them by hand.
+
+### Fixed
+- The DDL check of seeds and the DML check of migrations no longer look inside quoted values. A seed with `INSERT INTO t VALUES ('drop table')` was rejected.
+
+### Changed
+- The TypeScript build targets ES2022 (Node 22 is already required).
+
 ## [0.6.0] - 2026-10-09
 
 ### Added

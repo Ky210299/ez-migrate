@@ -357,6 +357,16 @@ describe.each(DIALECTS)("%s", (dialect) => {
             expect(rows.map((x) => x.name)).toEqual(["a--b#c"]);
         });
 
+        it("runs seeds with SQL keywords inside quoted values", async () => {
+            p.addMigration("users", USERS_UP, USERS_DOWN);
+            expect(p.run("migrate").code).toBe(0);
+            p.addSeed("a", "INSERT INTO users (id, name) VALUES (1, 'x; DROP TABLE users');");
+            const r = p.run("seed");
+            expect(r.code, r.output).toBe(0);
+            const rows = await p.query("SELECT name FROM users");
+            expect(rows.map((x) => x.name)).toEqual(["x; DROP TABLE users"]);
+        });
+
         it("inserts nothing if one seed fails", async () => {
             p.addMigration("users", USERS_UP, USERS_DOWN);
             expect(p.run("migrate").code).toBe(0);

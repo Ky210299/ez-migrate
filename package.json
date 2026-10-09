@@ -1,6 +1,6 @@
 {
     "name": "@ky210299/ez-migrate",
-    "version": "0.6.0",
+    "version": "0.7.0",
     "description": "Lightweight CLI for SQL migrations and seeds written in plain .sql files (MySQL, PostgreSQL, SQLite)",
     "main": "dist/ez-migrate.js",
     "bin": {

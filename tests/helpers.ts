@@ -53,6 +53,8 @@ export interface Project {
     tracked: () => Promise<Rows>;
     /** Names of the seed files recorded as run */
     seeded: () => Promise<Array<string>>;
+    /** Create the target database (if needed) and run the statements one by one */
+    setup: (statements: Array<string>) => Promise<void>;
     cleanup: () => Promise<void>;
 }
 
@@ -113,6 +115,20 @@ async function queryOn(dialect: Dialect, database: string, sqliteFile: string, s
     try {
         return (await c.query(sql)).rows;
     } finally {
+        await c.end();
+    }
+}
+
+async function createDatabase(dialect: Dialect, database: string) {
+    if (dialect === "mysql") {
+        const c = await createConnection({ ...DB.mysql });
+        await c.query(`CREATE DATABASE IF NOT EXISTS ${database}`);
+        await c.end();
+    } else if (dialect === "postgres") {
+        const c = new Client({ ...DB.postgres, database: "postgres" });
+        await c.connect();
+        const { rowCount } = await c.query("SELECT 1 FROM pg_database WHERE datname = $1", [database]);
+        if (!rowCount) await c.query(`CREATE DATABASE ${database}`);
         await c.end();
     }
 }
@@ -197,7 +213,7 @@ export function createProject(dialect: Dialect, trackerDialect?: Dialect): Proje
         }
         return rows
             .map((r) => String(r.t))
-            .filter((t) => t !== "ez_migration" && t !== "ez_seed")
+            .filter((t) => t !== "ez_migration" && t !== "ez_seed" && !t.startsWith("sqlite_"))
             .sort();
     };
 
@@ -208,11 +224,16 @@ export function createProject(dialect: Dialect, trackerDialect?: Dialect): Proje
     const seeded = async () =>
         (await queryTracker("SELECT name FROM ez_seed ORDER BY name")).map((r) => String(r.name));
 
+    const setup = async (statements: Array<string>) => {
+        await createDatabase(dialect, database);
+        for (const sql of statements) await query(sql);
+    };
+
     const cleanup = async () => {
         rmSync(dir, { recursive: true, force: true });
         await dropDatabase(dialect, database);
         if (trackerDialect) await dropDatabase(trackerDialect, trackerDatabase);
     };
 
-    return { dir, dialect, database, run, addMigration, addSeed, tables, query, tracked, seeded, cleanup };
+    return { dir, dialect, database, run, addMigration, addSeed, tables, query, tracked, seeded, setup, cleanup };
 }
