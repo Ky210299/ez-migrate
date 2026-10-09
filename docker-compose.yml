@@ -1,0 +1,31 @@
+# Test databases for ez-migrate integration tests.
+# Start: docker compose up -d --wait
+# Stop:  docker compose down
+services:
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: ezmigrate
+    ports:
+      - "33306:3306"
+    tmpfs:
+      - /var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-pezmigrate"]
+      interval: 2s
+      timeout: 5s
+      retries: 60
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_PASSWORD: ezmigrate
+    ports:
+      - "55432:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres"]
+      interval: 2s
+      timeout: 5s
+      retries: 60
