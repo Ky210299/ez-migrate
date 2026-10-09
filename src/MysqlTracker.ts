@@ -1,6 +1,6 @@
 import { Pool, PoolConnection, createConnection, createPool, PoolOptions } from "mysql2/promise";
 
-import { Persistency, TRACKER_SCHEMA, Commit, Rollback, TABLE_NAME, EXPECTED_SCHEMA, MIGRATION_COLUMNS, migrationValues } from "./Repository.js";
+import { Persistency, TRACKER_SCHEMA, Commit, Rollback, TABLE_NAME, EXPECTED_SCHEMA, MIGRATION_COLUMNS, migrationValues, SEED_TABLE_NAME, SEED_TRACKER_SCHEMA, saveSeedsStatements } from "./Repository.js";
 import Migration, { MigrationData } from "./Migration.js";
 import { consoleLogger } from "./Logger.js";
 
@@ -65,13 +65,14 @@ export default class MysqlTracker implements Persistency{
         }
         this.db = createPool({ ...options, database: this.database, connectionLimit: 1 });
         await this.checkSchema();
+        await this.pool.query(SEED_TRACKER_SCHEMA);
     }
 
     /**
      * Runs the statement in a new transaction and returns the commit and rollback
      * functions. Both release the connection.
      */
-    private async inTransaction(sql: string, values: Array<string | null>, action: string) {
+    private async inTransaction(statements: Array<{ sql: string, values: Array<string | null> }>, action: string) {
         const connection: PoolConnection = await this.pool.getConnection();
         await connection.beginTransaction();
         const commit: Commit = async () => {
@@ -84,7 +85,7 @@ export default class MysqlTracker implements Persistency{
             consoleLogger.warn(`MySQL tracker rollback successfuly at ${action}`)
         }
         try {
-            await connection.execute(sql, values);
+            for (const { sql, values } of statements) await connection.execute(sql, values);
         } catch (err) {
             await rollback();
             throw new Error(`Error tracking the migration: ${err}`);
@@ -97,18 +98,18 @@ export default class MysqlTracker implements Persistency{
             .map(() => "(" + MIGRATION_COLUMNS.map(() => "?").join(",") + ")")
             .join(",");
         const sql = `INSERT INTO ${this.MIGRATION_TABLE} (${MIGRATION_COLUMNS.join(",")}) VALUES ${placeholders}`;
-        return this.inTransaction(sql, migrations.flatMap(migrationValues), "save migration");
+        return this.inTransaction([{ sql, values: migrations.flatMap(migrationValues) }], "save migration");
     };
 
     async removeMigrations(migrations: Array<MigrationData>) {
         const placeholders = migrations.map(() => "?").join(",")
         const sql = `DELETE FROM ${TABLE_NAME} WHERE migrated_at IN (${placeholders})`
-        return this.inTransaction(sql, migrations.map(m => m.migratedAt), "remove migrations");
+        return this.inTransaction([{ sql, values: migrations.map(m => m.migratedAt) }], "remove migrations");
     };
 
     async removeMigration(migration: MigrationData) {
         const sql = `DELETE FROM ${TABLE_NAME} WHERE migrated_at = ?`
-        return this.inTransaction(sql, [migration.migratedAt], "remove migration");
+        return this.inTransaction([{ sql, values: [migration.migratedAt] }], "remove migration");
     };
 
     async list(): Promise<Array<Migration>> {
@@ -135,6 +136,15 @@ export default class MysqlTracker implements Persistency{
         ) as unknown as [Array<DBMigrationData>];
         return rows.map(toMigration);
     };
+
+    async listSeeds(): Promise<Array<string>> {
+        const [rows] = await this.pool.query(`SELECT name FROM ${SEED_TABLE_NAME} ORDER BY name`) as unknown as [Array<{ name: string }>];
+        return rows.map(r => r.name);
+    }
+
+    async saveSeeds(names: Array<string>, seededAt: string) {
+        return this.inTransaction(saveSeedsStatements(names, seededAt, () => "?"), "save seeds");
+    }
 
     async close(): Promise<void>{
         await this.db?.end();

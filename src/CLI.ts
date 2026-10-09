@@ -38,7 +38,12 @@ program
     }
   });
 
-program.command("seed").description("Run all seeds").action(Seed.run);
+program
+  .command("seed")
+  .description("Run the seed files not run yet")
+  .option("-a, --all", "Run all seed files, also the ones already run")
+  .option("--fake", "Record the pending seeds as run without running them")
+  .action((options) => Seed.run(options));
 program.command("down").description("Revert the last migration").action(async () => { await Down.run() });
 program.command("up").description("Apply the next pending migration").action(Up.run);
 program .command("init [path]") .description("Initialize migration setup") .action(Init.run);

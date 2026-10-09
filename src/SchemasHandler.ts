@@ -5,6 +5,7 @@ import { randomUUID } from "node:crypto";
 import { basename } from "node:path";
 import Migration from "./Migration";
 import { isEmptySQL, normalizeSQL } from "./sql";
+import { fileTimestamp } from "./utils";
 
 type SchemaHandlerArguments = { migrationsPath: string };
 
@@ -95,7 +96,7 @@ export default class SchemasHandler {
     makeMigrationFile(name: string) {
         if (!name) throw new Error("Name is needed for create a new migration file");
 
-        const now = Migration.getPreciseNow();
+        const now = fileTimestamp();
         const endWithSlash = this.migrationsPath.endsWith("/");
         const path = `${this.migrationsPath}${endWithSlash ? "" : "/"}${now}-${name}.sql`;
 

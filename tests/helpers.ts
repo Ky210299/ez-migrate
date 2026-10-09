@@ -51,6 +51,8 @@ export interface Project {
     query: (sql: string) => Promise<Rows>;
     /** Rows of the tracker table */
     tracked: () => Promise<Rows>;
+    /** Names of the seed files recorded as run */
+    seeded: () => Promise<Array<string>>;
     cleanup: () => Promise<void>;
 }
 
@@ -195,20 +197,16 @@ export function createProject(dialect: Dialect, trackerDialect?: Dialect): Proje
         }
         return rows
             .map((r) => String(r.t))
-            .filter((t) => t !== "ez_migration")
+            .filter((t) => t !== "ez_migration" && t !== "ez_seed")
             .sort();
     };
 
-    const tracked = () => {
-        const trackerOn = trackerDialect ?? dialect;
-        // The SQLite tracker is always <sqlitePath>/tracker.db
-        return queryOn(
-            trackerOn,
-            trackerDatabase,
-            join(dir, "db", "tracker.db"),
-            "SELECT * FROM ez_migration ORDER BY migrated_at",
-        );
-    };
+    // The SQLite tracker is always <sqlitePath>/tracker.db
+    const queryTracker = (sql: string) =>
+        queryOn(trackerDialect ?? dialect, trackerDatabase, join(dir, "db", "tracker.db"), sql);
+    const tracked = () => queryTracker("SELECT * FROM ez_migration ORDER BY migrated_at");
+    const seeded = async () =>
+        (await queryTracker("SELECT name FROM ez_seed ORDER BY name")).map((r) => String(r.name));
 
     const cleanup = async () => {
         rmSync(dir, { recursive: true, force: true });
@@ -216,5 +214,5 @@ export function createProject(dialect: Dialect, trackerDialect?: Dialect): Proje
         if (trackerDialect) await dropDatabase(trackerDialect, trackerDatabase);
     };
 
-    return { dir, dialect, database, run, addMigration, addSeed, tables, query, tracked, cleanup };
+    return { dir, dialect, database, run, addMigration, addSeed, tables, query, tracked, seeded, cleanup };
 }

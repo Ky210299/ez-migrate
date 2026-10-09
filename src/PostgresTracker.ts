@@ -1,7 +1,7 @@
 import { Client, ClientConfig, QueryResult } from "pg"
 import { consoleLogger } from "./Logger.js";
 
-import { Persistency, TRACKER_SCHEMA, Commit, Rollback, TABLE_NAME, EXPECTED_SCHEMA, MIGRATION_COLUMNS, migrationValues } from "./Repository.js";
+import { Persistency, TRACKER_SCHEMA, Commit, Rollback, TABLE_NAME, EXPECTED_SCHEMA, MIGRATION_COLUMNS, migrationValues, SEED_TABLE_NAME, SEED_TRACKER_SCHEMA, saveSeedsStatements } from "./Repository.js";
 import Migration, { MigrationData } from "./Migration.js";
 import { MigrateError } from "./Errors.js";
 import DialectTranslator, { TranslatableKeyword } from "./DialectTraductor.js";
@@ -90,10 +90,11 @@ export default class PGTracker implements Persistency {
         await client.connect();
         this.db = client;
         await this.checkSchema();
+        await this.client.query(SEED_TRACKER_SCHEMA);
     }
 
     /** Begins a transaction, runs the statement and returns the commit and rollback functions */
-    private async inTransaction(sql: string, values: Array<string | null>, action: string) {
+    private async inTransaction(statements: Array<{ sql: string, values: Array<string | null> }>, action: string) {
         await this.client.query("BEGIN");
         const commit: Commit = async () => {
             await this.client.query("COMMIT")
@@ -103,7 +104,7 @@ export default class PGTracker implements Persistency {
             consoleLogger.warn(`Postgres tracker rollback successfuly at ${action}`)
         }
         try {
-            await this.client.query(sql, values);
+            for (const { sql, values } of statements) await this.client.query(sql, values);
         } catch (err) {
             await rollback();
             throw new Error(`Error tracking the migration: ${err}`);
@@ -117,18 +118,18 @@ export default class PGTracker implements Persistency {
             .map(() => "(" + MIGRATION_COLUMNS.map(() => `$${idx++}`).join(",") + ")")
             .join(",");
         const sql = `INSERT INTO ${this.MIGRATION_TABLE} (${MIGRATION_COLUMNS.join(",")}) VALUES ${placeholders}`;
-        return this.inTransaction(sql, migrations.flatMap(migrationValues), "save migration");
+        return this.inTransaction([{ sql, values: migrations.flatMap(migrationValues) }], "save migration");
     };
     
     async removeMigrations(migrations: Array<MigrationData>): Promise<{ commit: Commit; rollback: Rollback; }> { 
         const placeholders = migrations.map((_, i) => `$${i + 1}`).join(",")
         const sql = `DELETE FROM ${TABLE_NAME} WHERE migrated_at IN (${placeholders})`
-        return this.inTransaction(sql, migrations.map(m => m.migratedAt), "remove migrations");
+        return this.inTransaction([{ sql, values: migrations.map(m => m.migratedAt) }], "remove migrations");
     };
     
     async removeMigration(migration: MigrationData): Promise<{ commit: Commit; rollback: Rollback; }> { 
         const sql = `DELETE FROM ${TABLE_NAME} WHERE migrated_at = $1`
-        return this.inTransaction(sql, [migration.migratedAt], "remove migration");
+        return this.inTransaction([{ sql, values: [migration.migratedAt] }], "remove migration");
     };
     
     async list(): Promise<Array<Migration>> { 
@@ -156,6 +157,15 @@ export default class PGTracker implements Persistency {
         return rows.map(toMigration)
     };
     
+    async listSeeds(): Promise<Array<string>> {
+        const { rows } = await this.client.query(`SELECT name FROM ${SEED_TABLE_NAME} ORDER BY name`);
+        return rows.map(r => r.name);
+    }
+
+    async saveSeeds(names: Array<string>, seededAt: string) {
+        return this.inTransaction(saveSeedsStatements(names, seededAt, (i) => `$${i}`), "save seeds");
+    }
+
     async close(): Promise<void> { 
         await this.db?.end()
         this.db = null;

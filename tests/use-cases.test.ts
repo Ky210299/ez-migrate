@@ -85,6 +85,15 @@ describe.each(DIALECTS)("%s", (dialect) => {
             expect(files[1]).toMatch(/-second\.sql$/);
         });
 
+        it("creates file names without ':' (valid on Windows)", () => {
+            expect(p.run("make", "users").code).toBe(0);
+            expect(p.run("make", "--seed", "users").code).toBe(0);
+            const [migration] = readdirSync(join(p.dir, "migrations"));
+            const [seed] = readdirSync(join(p.dir, "seeds"));
+            expect(migration).toMatch(/^\d{17}-users\.sql$/);
+            expect(seed).toMatch(/^\d{17}-users\.sql$/);
+        });
+
         it("creates a seed file with --seed", () => {
             expect(p.run("make", "--seed", "users").code).toBe(0);
             expect(p.run("make", "--seed", "posts").code).toBe(0);
@@ -356,6 +365,62 @@ describe.each(DIALECTS)("%s", (dialect) => {
             const r = p.run("seed");
             expect(r.code).not.toBe(0);
             expect(await p.query("SELECT * FROM users")).toEqual([]);
+            expect(await p.seeded()).toEqual([]);
+        });
+
+        it("runs each seed file only once", async () => {
+            p.addMigration("users", USERS_UP, USERS_DOWN);
+            expect(p.run("migrate").code).toBe(0);
+            const first = p.addSeed("ana", "INSERT INTO users (id, name) VALUES (1, 'ana');");
+            expect(p.run("seed").code).toBe(0);
+            p.addSeed("bob", "INSERT INTO users (id, name) VALUES (2, 'bob');");
+            const r = p.run("seed");
+            expect(r.code, r.output).toBe(0);
+            const rows = await p.query("SELECT name FROM users ORDER BY id");
+            expect(rows.map((x) => x.name)).toEqual(["ana", "bob"]);
+            const { basename } = await import("node:path");
+            expect(await p.seeded()).toContain(basename(first));
+            expect(await p.seeded()).toHaveLength(2);
+            const again = p.run("seed");
+            expect(again.code, again.output).toBe(0);
+            expect(again.output).toMatch(/no pending seeds/i);
+            p.addSeed("eva", "INSERT INTO users (id, name) VALUES (3, 'eva');");
+            const status = p.run("status");
+            expect(status.output).toMatch(/✔ - ana\.sql/);
+            expect(status.output).toMatch(/✘ - eva\.sql/);
+        });
+
+        it("runs all seed files again with --all", async () => {
+            p.addMigration("users", USERS_UP, USERS_DOWN);
+            expect(p.run("migrate").code).toBe(0);
+            p.addSeed("clean", "DELETE FROM users;");
+            p.addSeed("ana", "INSERT INTO users (id, name) VALUES (1, 'ana');");
+            expect(p.run("seed").code).toBe(0);
+            const r = p.run("seed", "--all");
+            expect(r.code, r.output).toBe(0);
+            expect(await p.query("SELECT name FROM users")).toEqual([{ name: "ana" }]);
+            expect(await p.seeded()).toHaveLength(2);
+        });
+
+        it("records seeds without running them with --fake", async () => {
+            p.addMigration("users", USERS_UP, USERS_DOWN);
+            expect(p.run("migrate").code).toBe(0);
+            p.addSeed("ana", "INSERT INTO users (id, name) VALUES (1, 'ana');");
+            const r = p.run("seed", "--fake");
+            expect(r.code, r.output).toBe(0);
+            expect(await p.query("SELECT * FROM users")).toEqual([]);
+            expect(await p.seeded()).toHaveLength(1);
+            expect(p.run("seed").output).toMatch(/no pending seeds/i);
+        });
+
+        it("skips empty seed files", async () => {
+            p.addMigration("users", USERS_UP, USERS_DOWN);
+            expect(p.run("migrate").code).toBe(0);
+            p.addSeed("empty", "-- nothing here\n");
+            p.addSeed("ana", "INSERT INTO users (id, name) VALUES (1, 'ana')");
+            const r = p.run("seed");
+            expect(r.code, r.output).toBe(0);
+            expect(await p.query("SELECT name FROM users")).toEqual([{ name: "ana" }]);
         });
 
         it("does nothing when there are no seeds", () => {

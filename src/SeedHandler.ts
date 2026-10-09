@@ -1,6 +1,7 @@
 import { Config } from "./types";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs"
 import { isEmptySQL, normalizeSQL } from "./sql";
+import { fileTimestamp } from "./utils";
 
 export default class SeedHandler {
     private readonly SEEDS_PATH: string
@@ -32,7 +33,7 @@ export default class SeedHandler {
     makeSeedFile(name: string) {
         if (!name) throw new Error("Name is needed for create a new seed file");
 
-        const now = new Date().toISOString();
+        const now = fileTimestamp();
         const endWithSlash = this.SEEDS_PATH.endsWith("/");
         const path = `${this.SEEDS_PATH}${endWithSlash ? "" : "/"}${now}-${name}.sql`;
         if (existsSync(path)) throw new Error("The seed file already exists");
@@ -40,15 +41,18 @@ export default class SeedHandler {
         return path
     }
     
-    /** Returns the SQL of every seed file, in file name order. Throws if a seed has DDL */
+    /**
+     * Returns the file name and SQL of every seed file, in file name order.
+     * Empty files are skipped. Throws if a seed has DDL
+     */
     getSeeds() {
-        const paths = this.addSeedsPathToSchemasName(this.getSeedsFileNames());
-        const seeds: Array<string> = [];
-        for (const path of paths) {
+        const seeds: Array<{ name: string, sql: string }> = [];
+        for (const name of this.getSeedsFileNames()) {
+            const [path] = this.addSeedsPathToSchemasName([name]);
             const sql = readFileSync(path, "utf8");
             if (isEmptySQL(sql)) continue;
             if (this.hasDDL(sql)) throw new Error(`File ${path} has DDL statements. Seeds can only have DML`);
-            seeds.push(sql.trim());
+            seeds.push({ name, sql: sql.trim() });
         }
         return seeds
     }
