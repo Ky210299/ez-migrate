@@ -8,12 +8,10 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
-### Added
-- GitHub Actions workflow `release.yml`: pushing a tag `vX.Y.Z` runs the tests and publishes the package to npm with trusted publishing (no npm token stored).
-
 ## [0.5.0] - 2026-10-09
 
 ### Added
+- GitHub Actions workflow `release.yml`: runs the tests and publishes to npm with trusted publishing (no npm token stored). It starts when a tag `vX.Y.Z` is pushed, or by hand from the Actions tab, which also creates the tag.
 - Integration tests (Vitest) for every command on MySQL, PostgreSQL and SQLite, plus a target and tracker on different DBMS.
 - `docker-compose.yml` with MySQL 8.4 and PostgreSQL 16 for the tests (`pnpm run db:up`).
 - GitHub Actions workflow that runs lint and tests on every push and pull request.
