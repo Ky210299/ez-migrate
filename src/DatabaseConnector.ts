@@ -1,5 +1,7 @@
 import { ConsoleLoggerImpl } from "./Logger";
 
+export type Row = Record<string, unknown>;
+
 /** Represent a database connection where migrations will be made */
 export interface Connection {
     /** The Database Managment System name of the connection */
@@ -7,6 +9,11 @@ export interface Connection {
     /** A method that returns true whether can connect to the DBMS, false otherwise */
     isConnected: () => Promise<boolean>;
     runSQL: (sql: string) => Promise<unknown>;
+    /**
+     * Run a read query outside a transaction and return the rows. Values are kept
+     * close to their text form (dates and big numbers as strings) to write them back as SQL
+     */
+    query: (sql: string, values?: Array<unknown>) => Promise<Array<Row>>;
     /** Initialize any necessary configuration of the DBMS before run the migrations */
     init: (migrationPath?: string, migrationDirection?: string) => Promise<void>;
     
@@ -63,6 +70,11 @@ class DatabaseConnector {
         }
     }
     
+    /** Run a read query and return the rows */
+    async query(sql: string, values?: Array<unknown>) {
+        return await this.connection.query(sql, values);
+    }
+
     async close() {
         await this.connection.close();
     }

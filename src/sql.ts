@@ -48,6 +48,24 @@ function findClosingQuote(sql: string, start: number, quote: string): number {
     return sql.length;
 }
 
+/** Replaces the text inside quotes with nothing ('a; DROP x' -> ''), so checks don't look inside values */
+export function stripStrings(sql: string): string {
+    let out = "";
+    let i = 0;
+    while (i < sql.length) {
+        const ch = sql[i];
+        if (ch === "'" || ch === '"' || ch === "`") {
+            const end = findClosingQuote(sql, i, ch);
+            out += ch + ch;
+            i = end;
+        } else {
+            out += ch;
+            i++;
+        }
+    }
+    return out;
+}
+
 /** SQL without comments and with all whitespace collapsed. Used to inspect and compare SQL, not to run it */
 export function normalizeSQL(sql: string): string {
     return stripComments(sql).replace(/\s+/g, " ").trim();

@@ -2,7 +2,7 @@ import sqlite from "node:sqlite";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
-import { SqliteConnection as SqliteConnectionInterface } from "./DatabaseConnector";
+import { Row, SqliteConnection as SqliteConnectionInterface } from "./DatabaseConnector";
 import { consoleLogger } from "./Logger";
 import { describeTarget } from "./utils";
 
@@ -51,6 +51,10 @@ export default class SqliteConnection implements SqliteConnectionInterface {
         }
     }
     
+    async query(sql: string, values: Array<unknown> = []): Promise<Array<Row>> {
+        return this.open().prepare(sql).all(...(values as Array<string | number | null>)) as Array<Row>;
+    }
+
     async close() {
         this.db?.close();
         this.db = null;

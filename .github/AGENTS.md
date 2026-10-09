@@ -50,7 +50,7 @@ pnpm run db:down    # stop the databases
 
 ### TypeScript Configuration
 - Strict mode enabled (`"strict": true`)
-- Target: ES2016
+- Target: ES2022
 - Module system: CommonJS
 - Output directory: `./dist/`
 - Skip lib checking: true
@@ -107,6 +107,10 @@ export default class Make {
 - Support for MySQL, PostgreSQL, and SQLite
 - Each database dialect has its own tracker implementation
 - Use factory pattern for database connections and trackers
+
+### Schema export (`baseline`)
+- `src/SchemaDumper.ts` reads the schema and data of the target database, one method per dialect, through `DatabaseConnector.query` (raw text values, no driver parsing).
+- `tests/baseline.test.ts` checks the round trip: database A → `baseline --data` → migrate + seed on empty database B → same schema and data. Add a column type or object there when you change the dumper.
 
 ### Configuration
 - Configuration file: `ez-migrate.json` (handled by `ConfigReader`)

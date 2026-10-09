@@ -1,6 +1,6 @@
 import { createConnection, createPool } from "mysql2/promise";
 import type { PoolOptions, Pool } from "mysql2/promise";
-import { MySQLConnection } from "./DatabaseConnector.js";
+import { MySQLConnection, Row } from "./DatabaseConnector.js";
 import { ConsoleLoggerImpl } from "./Logger.js";
 import { describeTarget } from "./utils.js";
 
@@ -49,6 +49,9 @@ export default class MysqlConnection implements MySQLConnection {
             database: this.database,
             multipleStatements: true,
             connectionLimit: 1,
+            dateStrings: true,
+            supportBigNumbers: true,
+            bigNumberStrings: true,
         });
         return this.pool;
     }
@@ -90,6 +93,12 @@ export default class MysqlConnection implements MySQLConnection {
         }
     }
     
+    async query(sql: string, values?: Array<unknown>): Promise<Array<Row>> {
+        const pool = await this.getPool();
+        const [rows] = await pool.query(sql, values);
+        return rows as Array<Row>;
+    }
+
     async close() {
         await this.pool?.end()
         this.pool = null;

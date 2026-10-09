@@ -1,7 +1,7 @@
 import { Client } from "pg";
-import type { ClientConfig } from "pg";
+import type { ClientConfig, CustomTypesConfig } from "pg";
 import { ConsoleLoggerImpl } from "./Logger";
-import { PostgresConnection } from "./DatabaseConnector";
+import { PostgresConnection, Row } from "./DatabaseConnector";
 import { describeTarget } from "./utils";
 
 export default class PostgresConnectionImpl implements PostgresConnection{
@@ -94,6 +94,14 @@ export default class PostgresConnectionImpl implements PostgresConnection{
             await client.query("ROLLBACK").catch(() => {});
             throw err;
         }
+    }
+
+    async query(sql: string, values?: Array<unknown>): Promise<Array<Row>> {
+        const client = await this.connect();
+        // Keep every value as the text Postgres sends, so it can be written back as a literal
+        const types = { getTypeParser: () => (value: string) => value } as unknown as CustomTypesConfig;
+        const { rows } = await client.query({ text: sql, values, types });
+        return rows;
     }
 
     async close(): Promise<void> {

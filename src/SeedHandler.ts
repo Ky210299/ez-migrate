@@ -1,6 +1,6 @@
 import { Config } from "./types";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs"
-import { isEmptySQL, normalizeSQL } from "./sql";
+import { isEmptySQL, normalizeSQL, stripStrings } from "./sql";
 import { fileTimestamp } from "./utils";
 
 export default class SeedHandler {
@@ -14,7 +14,7 @@ export default class SeedHandler {
     }
     
     hasDDL(sql: string) {
-        return this.DDLRegExp.test(normalizeSQL(sql))
+        return this.DDLRegExp.test(stripStrings(normalizeSQL(sql)))
     }
 
     getSeedsFileNames() {
@@ -41,6 +41,13 @@ export default class SeedHandler {
         return path
     }
     
+    /** Write a seed file with the given SQL. Returns its path */
+    writeSeedFile(name: string, sql: string) {
+        const path = this.makeSeedFile(name);
+        writeFileSync(path, sql);
+        return path
+    }
+
     /**
      * Returns the file name and SQL of every seed file, in file name order.
      * Empty files are skipped. Throws if a seed has DDL

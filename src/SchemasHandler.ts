@@ -4,7 +4,7 @@ import { DEFAULT_MIGRATION_PATH } from "./constants";
 import { randomUUID } from "node:crypto";
 import { basename } from "node:path";
 import Migration from "./Migration";
-import { isEmptySQL, normalizeSQL } from "./sql";
+import { isEmptySQL, normalizeSQL, stripStrings } from "./sql";
 import { fileTimestamp } from "./utils";
 
 type SchemaHandlerArguments = { migrationsPath: string };
@@ -30,7 +30,7 @@ export default class SchemasHandler {
 
     }
     hasDML(sql: string){
-        return this.DMLRegExp.test(normalizeSQL(sql));
+        return this.DMLRegExp.test(stripStrings(normalizeSQL(sql)));
     }
 
     private ensureMigrationPathExists() {
@@ -102,6 +102,13 @@ export default class SchemasHandler {
 
         if (existsSync(path)) throw new Error("The migration file already exists");
         writeFileSync(path, this.migrationSQLTemplate);
+        return path
+    }
+
+    /** Write a migration file with the given up and down SQL. Returns its path */
+    writeMigrationFile(name: string, up: string, down: string) {
+        const path = this.makeMigrationFile(name);
+        writeFileSync(path, `-- ez-migration-up\n${up.trim()}\n-- ez-migration-up\n-- ez-migration-down\n${down.trim()}\n-- ez-migration-down\n`);
         return path
     }
 
