@@ -8,6 +8,9 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+### Added
+- GitHub Actions workflow `release.yml`: pushing a tag `vX.Y.Z` runs the tests and publishes the package to npm with trusted publishing (no npm token stored).
+
 ## [0.5.0] - 2026-10-09
 
 ### Added

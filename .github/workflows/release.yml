@@ -1,0 +1,40 @@
+name: Release
+
+# Publishes the package to npm when a tag like v1.2.3 is pushed.
+# Uses npm trusted publishing (OIDC): no npm token is stored in GitHub.
+# One-time setup on npmjs.com: package settings > Trusted publisher >
+# GitHub Actions, repository Ky210299/ez-migrate, workflow release.yml.
+
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Check that the tag matches package.json
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          if [ "v$VERSION" != "$GITHUB_REF_NAME" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match package.json version $VERSION"
+            exit 1
+          fi
+      - name: Start test databases
+        run: docker compose up -d --wait
+      - run: pnpm run lint
+      - run: pnpm test
+      - name: Publish to npm
+        run: npm publish --provenance --access public
