@@ -1,6 +1,7 @@
 import type { Config } from "./types";
 
-export const CONFIG_PATH = "./ez-migrate.json";
+export const CONFIG_FILE_NAME = "ez-migrate.json";
+export const CONFIG_PATH = `./${CONFIG_FILE_NAME}`;
 export const DEFAULT_MIGRATION_PATH = "./migrations";
 export const DEFAULT_SEEDS_PATH = "./seeds";
 

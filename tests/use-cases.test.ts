@@ -23,6 +23,19 @@ describe("init", () => {
             expect(config.dialect).toBe("mysql");
             expect(config.migrationsPath).toBe("./migrations");
             expect(config.seedsPath).toBe("./seeds");
+            // Without tracker the migrations are tracked in the target database
+            expect(config.tracker).toBeUndefined();
+        } finally {
+            rmSync(dir, { recursive: true, force: true });
+        }
+    });
+
+    it("creates the config in the given directory", () => {
+        const dir = mkdtempSync(join(tmpdir(), "ezm-init-"));
+        try {
+            const result = spawnSync(process.execPath, [CLI, "init", "app"], { cwd: dir, encoding: "utf8" });
+            expect(result.status).toBe(0);
+            expect(existsSync(join(dir, "app", "ez-migrate.json"))).toBe(true);
         } finally {
             rmSync(dir, { recursive: true, force: true });
         }
