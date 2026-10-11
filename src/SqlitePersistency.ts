@@ -58,7 +58,7 @@ export default class SqlitePersistency implements Persistency {
         };
         const rollback: Rollback = async () => {
             this.db.exec("ROLLBACK");
-            consoleLogger.warn(`SQLite tracker rollback successfuly at ${action}`)
+            consoleLogger.debug(`SQLite tracker change rolled back (${action})`)
         }
         try {
             for (const { sql, values } of statements) this.db.prepare(sql).run(...values);

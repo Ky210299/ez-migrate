@@ -8,6 +8,23 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-10-11
+
+### Added
+- Global options for logs: `--log-level <error|warn|info|debug>`, `--verbose` (same as `debug`), `--log-format <pretty|json>`. Env vars: `EZ_MIGRATE_LOG_LEVEL`, `EZ_MIGRATE_LOG_FORMAT`.
+- Traces: `--trace` prints the time of each step (connection, tracker, each migration, each SQL run). `--trace-file <path>` writes them as a Chrome trace file for https://ui.perfetto.dev. Env vars: `EZ_MIGRATE_TRACE=1`, `EZ_MIGRATE_TRACE_FILE`.
+- With `--verbose`, errors also show the stack trace and the original database error.
+
+### Changed
+- Commands start about 4 times faster (about 300 ms to about 70 ms). The logger (pino with pino-pretty) started a worker thread on every run; it is replaced by a small logger without dependencies. The database drivers are loaded only for the dialect in use.
+- A failed migration says which file failed: `Migration <file> (up) failed: <database error>`.
+- A failed migration is reported once. Before, the database error was also logged by the connection, and the tracker rollback was logged as a warning.
+- `status` prints its list directly to stdout, so it shows with any log level and format.
+- The SQLite `ExperimentalWarning` of Node is no longer printed.
+
+### Removed
+- Dependencies `pino` and `pino-pretty`.
+
 ## [0.8.0] - 2026-10-11
 
 ### Changed

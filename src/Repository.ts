@@ -1,5 +1,6 @@
 import { TranslatableKeyword } from "./DialectTraductor";
 import Migration, { MigrationData } from "./Migration";
+import { tracer } from "./Tracer";
 export const TABLE_NAME = "ez_migration";
 /**
  *  Don't put semicolon at the end of the schema query to
@@ -134,39 +135,43 @@ export default class Repository {
         this.persistency = persistency;
     }
     async save(migrations: Array<MigrationData>) {
-        return await this.persistency.save(migrations);
+        return await tracer.span("tracker.save", {}, () => this.persistency.save(migrations));
     }
     async removeMigrations(migrations: Array<MigrationData>) {
-        return await this.persistency.removeMigrations(migrations);
+        return await tracer.span("tracker.removeMigrations", {}, () => this.persistency.removeMigrations(migrations));
     }
     async removeMigration(migration: MigrationData) {
-        return await this.persistency.removeMigration(migration);
+        return await tracer.span("tracker.removeMigration", {}, () => this.persistency.removeMigration(migration));
     }
     async listMigrations() {
-        await this.persistency.init();
-        return await this.persistency.list();
+        await this.init();
+        return await tracer.span("tracker.list", {}, () => this.persistency.list());
     }
     async getLastMigrationDone() {
-        return await this.persistency.getLastMigrationDone()
+        return await tracer.span("tracker.getLastMigrationDone", {}, () => this.persistency.getLastMigrationDone());
     }
     async getLastBatchMigrationDone(){
-        return await this.persistency.getLastBatchMigrationDone();
+        return await tracer.span("tracker.getLastBatchMigrationDone", {}, () => this.persistency.getLastBatchMigrationDone());
     }
     
     async listSeeds() {
-        await this.persistency.init();
-        return await this.persistency.listSeeds();
+        await this.init();
+        return await tracer.span("tracker.listSeeds", {}, () => this.persistency.listSeeds());
     }
     async saveSeeds(names: Array<string>, seededAt: string) {
-        return await this.persistency.saveSeeds(names, seededAt);
+        return await tracer.span("tracker.saveSeeds", {}, () => this.persistency.saveSeeds(names, seededAt));
     }
 
     async init() {
-        await this.persistency.init()
+        await tracer.span("tracker.init", {}, () => this.persistency.init());
     }
     
+    private closed = false;
+    /** Close the tracker. Calling it again does nothing */
     async close() {
-        await this.persistency.close() 
+        if (this.closed) return;
+        this.closed = true;
+        await tracer.span("tracker.close", {}, () => this.persistency.close());
     }
     
 }

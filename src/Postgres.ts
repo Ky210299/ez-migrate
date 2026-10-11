@@ -90,7 +90,7 @@ export default class PostgresConnectionImpl implements PostgresConnection{
             await client.query("COMMIT");
             return result;
         } catch (err) {
-            this.logger.error(`Postgres error during migration:\n${err}`);
+            this.logger.debug(`Postgres error, transaction rolled back: ${err}`);
             await client.query("ROLLBACK").catch(() => {});
             throw err;
         }

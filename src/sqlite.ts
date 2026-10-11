@@ -45,7 +45,7 @@ export default class SqliteConnection implements SqliteConnectionInterface {
             db.exec(sql);
             db.exec("COMMIT");
         } catch (err) {
-            consoleLogger.error(`SQLite error during migration:\n${err}`);
+            consoleLogger.debug(`SQLite error, transaction rolled back: ${err}`);
             db.exec("ROLLBACK");
             throw err;
         }

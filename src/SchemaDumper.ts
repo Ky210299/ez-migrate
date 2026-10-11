@@ -3,6 +3,7 @@ import type { Row } from "./DatabaseConnector";
 import { MIGRATIONS_DIALECTS } from "./constants";
 import { SEED_TABLE_NAME, TABLE_NAME } from "./Repository";
 import type { Config } from "./types";
+import { tracer } from "./Tracer";
 
 /** Tables of ez-migrate itself. They are never exported */
 const OWN_TABLES = [TABLE_NAME, SEED_TABLE_NAME];
@@ -363,8 +364,9 @@ export default class SchemaDumper {
         let total = 0;
         if (this.dialect === MIGRATIONS_DIALECTS.MYSQL) parts.push("SET FOREIGN_KEY_CHECKS = 0;");
         for (const table of tables) {
+            await tracer.span("baseline.table", { table: table.raw }, async () => {
             const { columns, override, serials } = await this.insertableColumns(table);
-            if (columns.length === 0) continue;
+            if (columns.length === 0) return;
             const rows = await this.query(`SELECT ${columns.map(c => c.name).join(", ")} FROM ${table.name}`);
             total += rows.length;
             for (let i = 0; i < rows.length; i += batchSize) {
@@ -378,6 +380,7 @@ export default class SchemaDumper {
                 const name = columns.find(c => c.raw === column)?.name ?? column;
                 parts.push(`SELECT setval(pg_get_serial_sequence(${this.literal(table.name)}, ${this.literal(column)}), COALESCE(MAX(${name}), 1), MAX(${name}) IS NOT NULL) FROM ${table.name};`);
             }
+            });
         }
         if (this.dialect === MIGRATIONS_DIALECTS.MYSQL) parts.push("SET FOREIGN_KEY_CHECKS = 1;");
         return { sql: parts.join("\n\n") + "\n", rows: total };
