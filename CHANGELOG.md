@@ -8,6 +8,15 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-10-11
+
+### Changed
+- `baseline --data` no longer writes the data as a seed. Seeds are committed to git, and real data (often personal data) must not be. The data now goes to `./ez-migrate-data/<timestamp>-baseline-data.sql`, a folder with its own `.gitignore`, and it is not recorded as a seed. If you used 0.7.0, move the `*-baseline-data.sql` file out of the seeds folder and out of git history.
+
+### Added
+- `baseline --data-path <folder>` sets the folder of the data file.
+- `seed --file <path>` runs one SQL file from any folder, in one transaction, without recording it. Use it to load the baseline data file in another database.
+
 ## [0.7.0] - 2026-10-09
 
 ### Added

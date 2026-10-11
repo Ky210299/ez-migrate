@@ -93,6 +93,7 @@ INSERT INTO users (id, name) VALUES (2, 'bob');
 - Run seeds are recorded in the table `ez_seed`, so running `seed` again only runs new files. It is safe to run it on every deploy.
 - `seed --all` runs every seed file again. Your SQL must handle data that already exists (for example `DELETE` first, or `INSERT ... ON CONFLICT DO NOTHING`).
 - `seed --fake` records the pending seeds as run without running them. Use it when the data is already in the database.
+- `seed --file <path>` runs only that file, from any folder, in one transaction, and doesn't record it. Use it for data that must not be in git, like the data file of `baseline --data`.
 
 Add `-e` to `make` to open the new file in `$EDITOR`.
 
@@ -174,8 +175,8 @@ By default the history is stored in the table `ez_migration` of the target datab
 | `redo` | Reverts the last migration and applies the same file again. |
 | `reset` | Reverts all applied migrations, newest first, then runs `migrate`. |
 | `status` | Lists the migration files (`✔` applied, `✘` pending, `⚠️` applied but the file changed after) and the seed files (`✔` run, `✘` pending). Also `list` or no command. |
-| `seed` | Runs the seed files not run yet, in one transaction. `-a, --all` runs all again. `--fake` records them without running them. |
-| `baseline` | Writes the schema of an existing database as the first migration and marks it as applied. `-d, --data` also writes the current rows as a seed and marks it as run. `-n, --name <name>` sets the file name. See [Adopt ez-migrate](#adopt-ez-migrate-on-an-existing-database). |
+| `seed` | Runs the seed files not run yet, in one transaction. `-a, --all` runs all again. `--fake` records them without running them. `-f, --file <path>` runs only that file and doesn't record it. |
+| `baseline` | Writes the schema of an existing database as the first migration and marks it as applied. `-d, --data` also writes the current rows to a file ignored by git (`--data-path <folder>`, default `./ez-migrate-data`). `-n, --name <name>` sets the file name. See [Adopt ez-migrate](#adopt-ez-migrate-on-an-existing-database). |
 | `version` | Prints the version. Also `-v, --version`. |
 
 The CLI exits with code `0` on success and `1` on any error, so it can stop a deploy script or CI job.
@@ -193,24 +194,26 @@ ez-migrate baseline --data
 
 This writes:
 
-- `migrations/<timestamp>-baseline.sql`: `CREATE` statements for all tables, indexes, foreign keys and views (and enums on PostgreSQL), in an order that works. The down section drops them.
-- `seeds/<timestamp>-baseline-data.sql` (only with `--data`): `INSERT` statements with all the current rows.
+- `migrations/<timestamp>-baseline.sql`: `CREATE` statements for all tables, indexes, foreign keys and views (and enums on PostgreSQL), in an order that works. The down section drops them. It has no data, so you commit it like any migration.
+- `ez-migrate-data/<timestamp>-baseline-data.sql` (only with `--data`): `INSERT` statements with all the current rows. The folder gets its own `.gitignore`, so **the data never goes to git**. Change the folder with `--data-path <folder>`.
 
-Both files are **recorded as done** in the existing database, without running them, because that database already has the schema and the rows. From now on you add new migrations with `make` as usual.
+The migration is **recorded as applied** in the existing database, without running it, because that database already has the schema. From now on you add new migrations with `make` as usual.
 
-On a new empty database (local, CI, a new server), `migrate` and `seed` create the same schema and data:
+On a new empty database (local, CI, a new server), create the schema and, if you need it, load the data file:
 
 ```bash
 ez-migrate migrate
-ez-migrate seed
+ez-migrate seed --file ez-migrate-data/<timestamp>-baseline-data.sql
 ```
+
+Share the data file only through a private channel (or don't share it). It has all the rows, including personal data.
 
 Notes:
 
 - `baseline` stops if the tracker already has migrations, or if the database has no tables. It never changes the existing tables.
 - Not exported: triggers, functions, procedures and standalone sequences. `baseline` lists them. Add them to a new migration by hand if you need them.
-- `--data` reads every table into memory. For big databases, use `baseline` without `--data` and copy the data with the DBMS tools (`pg_dump --data-only`, `mysqldump --no-create-info`), or keep only small lookup tables in the seed.
-- `--data` writes all rows, including personal data. Check the seed before committing it.
+- `--data` reads every table into memory. For big databases, use `baseline` without `--data` and copy the data with the DBMS tools (`pg_dump --data-only`, `mysqldump --no-create-info`).
+- The data file is not a seed. It is not recorded, so `seed --file` runs it every time you call it. Data that belongs in git (roles, countries, settings) goes in normal seed files.
 - Review the generated SQL. It is plain SQL for your DBMS, so you can edit it before committing.
 - With SQLite the `CREATE` statements are copied exactly as they are stored in the database file.
 
@@ -231,7 +234,7 @@ Notes:
 ## Advantages, disadvantages and use cases
 
 This section is updated with each version, based on what the tests and real use show.
-*Last review: 0.7.0.*
+*Last review: 0.8.0.*
 
 ### Advantages
 
@@ -243,7 +246,7 @@ This section is updated with each version, based on what the tests and real use 
 - **Schema and data are separated.** Migrations reject DML and seeds reject DDL, so data scripts don't hide in schema changes.
 - **Detects edited migrations.** `status` marks applied files that changed after being applied.
 - **Seeds run once.** `seed` only runs new seed files, so it can run on every deploy.
-- **Easy to adopt.** `baseline` turns an existing database into a first migration (and seed) in one command, on all three DBMS.
+- **Easy to adopt.** `baseline` turns an existing database into a first migration in one command, on all three DBMS. The current data can be exported too, to a folder that git ignores.
 - **Works with branches.** Migrations merged later with an older name are still applied.
 - **Script friendly.** Exit code `1` on errors.
 

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { existsSync, readdirSync, readFileSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { spawnSync } from "node:child_process";
@@ -355,6 +355,23 @@ describe.each(DIALECTS)("%s", (dialect) => {
             expect(r.code, r.output).toBe(0);
             const rows = await p.query("SELECT name FROM users");
             expect(rows.map((x) => x.name)).toEqual(["a--b#c"]);
+        });
+
+        it("runs one file with --file without recording it", async () => {
+            p.addMigration("users", USERS_UP, USERS_DOWN);
+            expect(p.run("migrate").code).toBe(0);
+            p.addSeed("a", "INSERT INTO users (id, name) VALUES (1, 'ana');");
+            writeFileSync(join(p.dir, "data.sql"), "INSERT INTO users (id, name) VALUES (2, 'bob');");
+            const r = p.run("seed", "--file", "data.sql");
+            expect(r.code, r.output).toBe(0);
+            expect((await p.query("SELECT name FROM users")).map((x) => x.name)).toEqual(["bob"]);
+            // The seeds folder is not run and nothing is recorded
+            expect(await p.seeded()).toEqual([]);
+            writeFileSync(join(p.dir, "bad.sql"), "DROP TABLE users;");
+            const bad = p.run("seed", "--file", "bad.sql");
+            expect(bad.code).toBe(1);
+            expect(bad.output).toMatch(/DDL/);
+            expect(p.run("seed", "--file", "missing.sql").code).toBe(1);
         });
 
         it("runs seeds with SQL keywords inside quoted values", async () => {

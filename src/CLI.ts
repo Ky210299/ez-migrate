@@ -44,11 +44,13 @@ program
   .description("Run the seed files not run yet")
   .option("-a, --all", "Run all seed files, also the ones already run")
   .option("--fake", "Record the pending seeds as run without running them")
+  .option("-f, --file <path>", "Run only this SQL file, without recording it (for example a baseline data file)")
   .action((options) => Seed.run(options));
 program
   .command("baseline")
   .description("Write the schema of an existing database as the first migration and mark it as applied")
-  .option("-d, --data", "Also write the current data as a seed file and mark it as run")
+  .option("-d, --data", "Also write the current data to a file ignored by git")
+  .option("--data-path <folder>", "Folder of the data file", "./ez-migrate-data")
   .option("-n, --name <name>", "Name of the generated files", "baseline")
   .action((options) => Baseline.run(options));
 program.command("down").description("Revert the last migration").action(async () => { await Down.run() });
