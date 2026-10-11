@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { spawnSync } from "node:child_process";
 
 import { createProject, Dialect, DIALECTS, Project } from "./helpers";
 
@@ -137,6 +138,14 @@ async function describeData(p: Project) {
     return out;
 }
 
+/** Files that git would commit in the folder */
+function gitTracked(dir: string): Array<string> {
+    const git = (...args: Array<string>) => spawnSync("git", args, { cwd: dir, encoding: "utf8" });
+    git("init", "-q");
+    git("add", "-A");
+    return git("ls-files").stdout.split("\n").filter(Boolean);
+}
+
 function copyDir(from: string, to: string) {
     mkdirSync(to, { recursive: true });
     if (!existsSync(from)) return;
@@ -166,13 +175,19 @@ describe.each(DIALECTS)("baseline [%s]", (dialect) => {
 
         // The source database is not changed and nothing is pending
         const migrations = readdirSync(join(source.dir, "migrations"));
-        const seeds = readdirSync(join(source.dir, "seeds"));
         expect(migrations).toHaveLength(1);
         expect(migrations[0]).toMatch(/^\d{17}-baseline\.sql$/);
-        expect(seeds).toHaveLength(1);
-        expect(seeds[0]).toMatch(/^\d{17}-baseline-data\.sql$/);
         expect(source.run("migrate").output).toMatch(/No pending migrations/);
-        expect(source.run("seed").output).toMatch(/No pending seeds/);
+
+        // The data is not a seed: it is in its own folder, and git ignores it
+        expect(existsSync(join(source.dir, "seeds")) ? readdirSync(join(source.dir, "seeds")) : []).toEqual([]);
+        expect(await source.seeded()).toEqual([]);
+        const dataFiles = readdirSync(join(source.dir, "ez-migrate-data")).filter(f => f.endsWith(".sql"));
+        expect(dataFiles).toEqual([migrations[0].replace(".sql", "-data.sql")]);
+        const dataFile = join(source.dir, "ez-migrate-data", dataFiles[0]);
+        expect(result.output).toContain("seed --file");
+        expect(gitTracked(source.dir).some(f => f.startsWith("ez-migrate-data"))).toBe(false);
+        expect(gitTracked(source.dir)).toContain(`migrations/${migrations[0]}`);
         const status = source.run("status").output;
         expect(status).toMatch(/✔/);
         expect(status).not.toMatch(/✘|⚠️/);
@@ -180,13 +195,14 @@ describe.each(DIALECTS)("baseline [%s]", (dialect) => {
         // A new empty database built from the files
         const copy = project(dialect);
         copyDir(join(source.dir, "migrations"), join(copy.dir, "migrations"));
-        copyDir(join(source.dir, "seeds"), join(copy.dir, "seeds"));
         const migrate = copy.run("migrate");
         expect(migrate.output).not.toMatch(/rror/);
         expect(migrate.code).toBe(0);
-        const seed = copy.run("seed");
+        const seed = copy.run("seed", "--file", dataFile);
         expect(seed.output).not.toMatch(/rror/);
         expect(seed.code).toBe(0);
+        // A file run with --file is not recorded as a seed
+        expect(await copy.seeded()).toEqual([]);
 
         expect(await describeSchema(copy)).toEqual(await describeSchema(source));
         expect(await describeData(copy)).toEqual(await describeData(source));
@@ -211,7 +227,7 @@ describe.each(DIALECTS)("baseline [%s]", (dialect) => {
         const result = source.run("baseline", "--name", "initial_schema");
         expect(result.code).toBe(0);
         expect(readdirSync(join(source.dir, "migrations"))[0]).toMatch(/-initial_schema\.sql$/);
-        expect(existsSync(join(source.dir, "seeds")) ? readdirSync(join(source.dir, "seeds")) : []).toEqual([]);
+        expect(existsSync(join(source.dir, "ez-migrate-data"))).toBe(false);
         const sql = readFileSync(join(source.dir, "migrations", readdirSync(join(source.dir, "migrations"))[0]), "utf8");
         expect(sql).not.toMatch(/INSERT/i);
     });
@@ -240,7 +256,17 @@ describe.each(DIALECTS)("baseline [%s]", (dialect) => {
         await source.setup(SCHEMA[dialect]);
         expect(source.run("baseline", "--data").code).toBe(0);
         expect(await source.tracked()).toHaveLength(1);
-        expect(await source.seeded()).toHaveLength(1);
+        expect(await source.seeded()).toEqual([]);
         expect(source.run("migrate").output).toMatch(/No pending migrations/);
+    });
+
+    it("writes the data to the folder given with --data-path", async () => {
+        const source = project(dialect);
+        await source.setup(SCHEMA[dialect]);
+        expect(source.run("baseline", "--data", "--data-path", "backup/data").code).toBe(0);
+        const files = readdirSync(join(source.dir, "backup", "data")).sort();
+        expect(files).toHaveLength(2);
+        expect(files[0]).toBe(".gitignore");
+        expect(files[1]).toMatch(/-baseline-data\.sql$/);
     });
 });

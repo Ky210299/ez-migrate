@@ -11,6 +11,8 @@ export type SeedOptions = {
     all?: boolean,
     /** Record the pending seeds as run without running them */
     fake?: boolean,
+    /** Run only this file, without recording it */
+    file?: string,
 }
 
 export default class Seed {
@@ -18,10 +20,27 @@ export default class Seed {
     constructor() { throw new Error("Seed use case constructor not allowed") }
     
     /**
+     * Run one SQL file in one transaction, without recording it. For data that
+     * must not be in the seeds folder, like the data file written by baseline
+     */
+    static async runFile(path: string) {
+        const config = new ConfigReader().getConfig()
+        const sql = new SeedHandler(config).readSeedFile(path);
+        const seedExecutor = new SeedExecutor(ConnectionFactory.create(config));
+        try {
+            await seedExecutor.execute([sql]);
+        } finally {
+            await seedExecutor.close()
+        }
+        Seed.consoleLogger.info(`File run: ${path}`);
+    }
+
+    /**
      * Run the seed files not run yet, in one transaction, and record them in
      * the tracker. If one seed fails, nothing is inserted and nothing is recorded.
      */
     static async run(options: SeedOptions = {}){
+        if (options.file) return Seed.runFile(options.file);
         const config = new ConfigReader().getConfig()
         const seeds = new SeedHandler(config).getSeeds();
         const tracker = TrackerFactory.create(config);

@@ -41,11 +41,13 @@ export default class SeedHandler {
         return path
     }
     
-    /** Write a seed file with the given SQL. Returns its path */
-    writeSeedFile(name: string, sql: string) {
-        const path = this.makeSeedFile(name);
-        writeFileSync(path, sql);
-        return path
+    /** SQL of any seed file, also outside the seeds folder. Throws if it is empty or has DDL */
+    readSeedFile(path: string) {
+        if (!existsSync(path)) throw new Error(`File ${path} doesn't exist`);
+        const sql = readFileSync(path, "utf8");
+        if (isEmptySQL(sql)) throw new Error(`File ${path} is empty`);
+        if (this.hasDDL(sql)) throw new Error(`File ${path} has DDL statements. Seeds can only have DML`);
+        return sql.trim();
     }
 
     /**
