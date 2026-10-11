@@ -33,13 +33,14 @@ export default class Status {
                 }
                 return `${i + 1} ${mark} - ${shortName}`;
             });
-            Status.consoleLogger.info("\n" + (status.length ? status.reverse().join("\n") : "No migrations"));
+            // The list is the output of the command, not a log line: print it whatever the log level or format
+            console.log(status.length ? status.reverse().join("\n") : "No migrations");
 
             const seeds = new SeedHandler(config).getSeedsFileNames();
             if (seeds.length) {
                 const seedsDone = new Set(await tracker.listSeeds());
                 const seedStatus = seeds.map(name => `${seedsDone.has(name) ? "✔" : "✘"} - ${stripTimestamp(name)}`);
-                Status.consoleLogger.info("\nSeeds:\n" + seedStatus.join("\n"));
+                console.log("\nSeeds:\n" + seedStatus.join("\n"));
             }
         } finally {
             await tracker.close()

@@ -14,11 +14,12 @@ You write the SQL. ez-migrate runs it in order, records what was applied, and ca
 3. [Migration and seed files](#migration-and-seed-files)
 4. [Configuration](#configuration)
 5. [Commands](#commands)
-6. [Adopt ez-migrate on an existing database](#adopt-ez-migrate-on-an-existing-database)
-7. [How tracking works](#how-tracking-works)
-8. [Advantages, disadvantages and use cases](#advantages-disadvantages-and-use-cases)
-9. [Development and tests](#development-and-tests)
-10. [Changelog](#changelog)
+6. [Logs and traces](#logs-and-traces)
+7. [Adopt ez-migrate on an existing database](#adopt-ez-migrate-on-an-existing-database)
+8. [How tracking works](#how-tracking-works)
+9. [Advantages, disadvantages and use cases](#advantages-disadvantages-and-use-cases)
+10. [Development and tests](#development-and-tests)
+11. [Changelog](#changelog)
 
 ---
 
@@ -183,6 +184,39 @@ The CLI exits with code `0` on success and `1` on any error, so it can stop a de
 
 ---
 
+## Logs and traces
+
+These options work with every command:
+
+| Option | Env var | What it does |
+| --- | --- | --- |
+| `--log-level <level>` | `EZ_MIGRATE_LOG_LEVEL` | `error`, `warn`, `info` (default) or `debug`. |
+| `--verbose` | | Same as `--log-level debug`. Logs the start and end of every step, with its duration in ms. |
+| `--log-format <format>` | `EZ_MIGRATE_LOG_FORMAT` | `pretty` (default) or `json`: one JSON object per line, for log tools in CI or servers. |
+| `--trace` | `EZ_MIGRATE_TRACE=1` | At the end, prints a tree with the time of each step. |
+| `--trace-file <path>` | `EZ_MIGRATE_TRACE_FILE` | Writes the same timings as a Chrome trace file. Open it in [ui.perfetto.dev](https://ui.perfetto.dev) or `chrome://tracing` to see a timeline. |
+
+Example:
+
+```text
+$ ez-migrate migrate --trace
+...
+Trace (process 64.6 ms, startup 57 ms)
+       7.3 ms  command migrate
+         0.3 ms  tracker.init
+         0.3 ms  db.connect  db=postgres
+         3.1 ms  migration.up  file=20260101000000000-users.sql
+           0.3 ms  tracker.save
+           1.7 ms  db.run  db=postgres chars=40
+```
+
+- **Find a bottleneck:** the slowest line in the tree is the step to look at. `migration.up` / `migration.down` is one migration file, `db.run` is the SQL sent to the database, `db.connect` is the connection, and `tracker.*` are the reads and writes of the history tables. `baseline.table` is the time to read one table with `baseline --data`.
+- **Find an error:** a failed migration says which file failed (`Migration <file> (up) failed: <database error>`), and the failed steps are marked `FAILED` in the trace. With `--verbose` you also get the stack trace and the original database error.
+- **Privacy:** logs and traces never include the SQL text or its values, only file names and sizes. They are safe to keep in CI logs.
+- Logs `info` and `debug` go to stdout, `warn` and `error` to stderr. The output of `status` is always printed, whatever the log level.
+
+---
+
 ## Adopt ez-migrate on an existing database
 
 If you already have a database with tables, `baseline` turns it into ez-migrate files:
@@ -234,12 +268,13 @@ Notes:
 ## Advantages, disadvantages and use cases
 
 This section is updated with each version, based on what the tests and real use show.
-*Last review: 0.8.0.*
+*Last review: 0.9.0.*
 
 ### Advantages
 
 - **Plain SQL.** No ORM, no DSL, no JavaScript in migrations. You write exactly what the database runs.
-- **Small.** One CLI, one JSON config, five runtime dependencies.
+- **Small and fast.** One CLI, one JSON config, three runtime dependencies. A command starts in about 70 ms, and only the driver of the database in use is loaded.
+- **Easy to debug.** `--trace` shows the time of each step and `--verbose` logs every step, without printing your SQL or data.
 - **Up and down in one file.** Easy to review in a pull request.
 - **Safe on PostgreSQL and SQLite.** A failed migration leaves no partial changes.
 - **Flexible tracker.** The history can live in the same database, in a SQLite file, or in another server and DBMS.

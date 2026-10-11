@@ -117,10 +117,12 @@ export default class Make {
 - Environment variables support with customizable keys
 - Default configurations in `src/constants.ts`
 
-### Logging
-- Use the logger interface from `src/Logger.ts`
-- Exported `consoleLogger` instance should be used consistently
-- Logger supports `info`, `warn`, and `error` methods
+### Logging and tracing
+- Use the exported `consoleLogger` from `src/Logger.ts` (`error`, `warn`, `info`, `debug`, with optional fields). It has no dependencies; keep it that way, startup time matters.
+- Wrap a step that can be slow or fail in `tracer.span(name, attrs, fn)` from `src/Tracer.ts`. Use names like `db.*`, `tracker.*`, `migration.*`.
+- Never log or trace SQL text or values (they can contain personal data). Log file names and sizes instead. `tests/observability.test.ts` checks this.
+- Command output (like the `status` list) goes to `console.log`, not the logger.
+- Database drivers are loaded with `require` inside the factories so commands don't pay for drivers they don't use. Don't import `mysql2`, `pg` or the connection classes at the top of shared modules.
 
 ### CLI Patterns
 - All CLI commands are in `src/CLI.ts`

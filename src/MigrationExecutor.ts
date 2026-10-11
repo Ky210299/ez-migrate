@@ -1,6 +1,8 @@
 import type DatabaseConnector from "./DatabaseConnector";
 import Migration from "./Migration";
 import Repository from "./Repository";
+import { basename } from "node:path";
+import { tracer } from "./Tracer";
 
 /** Class that execute and track the migration(s) */
 class MigrationExecutor {
@@ -16,17 +18,24 @@ class MigrationExecutor {
      * if the SQL succeeds.
      */
     private async runTracked(
+        path: string,
+        direction: "up" | "down",
         sql: string,
         track: () => Promise<{ commit: () => Promise<void>, rollback: () => Promise<void> }>,
     ) {
-        const { commit, rollback } = await track();
-        try {
-            await this.dbconnector.runSQL(sql);
-        } catch (err) {
-            await rollback();
-            throw err;
-        }
-        await commit();
+        const file = basename(path);
+        await tracer.span(`migration.${direction}`, { file }, async () => {
+            const { commit, rollback } = await track();
+            try {
+                await this.dbconnector.runSQL(sql);
+            } catch (err) {
+                await rollback();
+                // Say which file failed: the database error alone doesn't
+                const message = err instanceof Error ? err.message : String(err);
+                throw new Error(`Migration ${file} (${direction}) failed: ${message}`, { cause: err });
+            }
+            await commit();
+        });
     }
 
     async executeSingleMigrationUp(migration: Migration) {
@@ -38,7 +47,7 @@ class MigrationExecutor {
         await this.dbconnector.testConnection();
         await this.dbconnector.initConnection(migrationData.path, "DOWN");
         await this.tracker.init()
-        await this.runTracked(migrationData.down, () => this.tracker.removeMigration(migrationData));
+        await this.runTracked(migrationData.path, "down", migrationData.down, () => this.tracker.removeMigration(migrationData));
     };
 
     async executeMigrationsUp(migrations: Array<Migration>) {
@@ -48,7 +57,7 @@ class MigrationExecutor {
         for (const m of migrations) {
             const migrationData = m.getDetails();
             await this.dbconnector.initConnection(migrationData.path, "UP");
-            await this.runTracked(migrationData.up, () => this.tracker.save([migrationData]));
+            await this.runTracked(migrationData.path, "up", migrationData.up, () => this.tracker.save([migrationData]));
         }
     }
 
@@ -59,7 +68,7 @@ class MigrationExecutor {
         for (const m of migrations) {
             const migrationData = m.getDetails();
             await this.dbconnector.initConnection(migrationData.path, "DOWN");
-            await this.runTracked(migrationData.down, () => this.tracker.removeMigration(migrationData));
+            await this.runTracked(migrationData.path, "down", migrationData.down, () => this.tracker.removeMigration(migrationData));
         }
     }
 

@@ -1,4 +1,5 @@
 import { ConsoleLoggerImpl } from "./Logger";
+import { tracer } from "./Tracer";
 
 export type Row = Record<string, unknown>;
 
@@ -53,30 +54,32 @@ class DatabaseConnector {
     }
     /** Run the sql into the DBMS */
     async runSQL(sql: string): Promise<void> {
-        await this.connection.runSQL(sql);
+        // Only the size is recorded: the SQL can have data that must not be in logs
+        await tracer.span("db.run", { db: this.connection.DBMSName, chars: sql.length }, () => this.connection.runSQL(sql));
     }
     
     /** Initialize any necessary configuration of the DBMS before run the migrations.
         You must always call this before running the migration
     */
     async initConnection(migrationPath?: string, migrationDirection?: string) {
-        await this.connection.init(migrationPath, migrationDirection);
+        await tracer.span("db.init", { db: this.connection.DBMSName }, () => this.connection.init(migrationPath, migrationDirection));
     }
     
     /** Throws if it cannot connect to the DBMS */
     async testConnection() {
-        if (!(await this.connection.isConnected())) {
+        const connected = await tracer.span("db.connect", { db: this.connection.DBMSName }, () => this.connection.isConnected());
+        if (!connected) {
             throw new Error(`Cannot connect to ${this.connection.DBMSName}`);
         }
     }
     
     /** Run a read query and return the rows */
     async query(sql: string, values?: Array<unknown>) {
-        return await this.connection.query(sql, values);
+        return await tracer.span("db.query", { db: this.connection.DBMSName }, () => this.connection.query(sql, values));
     }
 
     async close() {
-        await this.connection.close();
+        await tracer.span("db.close", { db: this.connection.DBMSName }, () => this.connection.close());
     }
 }
 

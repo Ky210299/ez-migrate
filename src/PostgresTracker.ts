@@ -101,7 +101,7 @@ export default class PGTracker implements Persistency {
         };
         const rollback: Rollback = async () => {
             await this.client.query("ROLLBACK")
-            consoleLogger.warn(`Postgres tracker rollback successfuly at ${action}`)
+            consoleLogger.debug(`Postgres tracker change rolled back (${action})`)
         }
         try {
             for (const { sql, values } of statements) await this.client.query(sql, values);

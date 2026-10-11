@@ -85,7 +85,7 @@ export default class MysqlConnection implements MySQLConnection {
             await connection.commit();
             return result;
         } catch (err) {
-            this.logger.error(`MySQL error doing migration:\n${err}`);
+            this.logger.debug(`MySQL error, transaction rolled back: ${err}`);
             await connection.rollback();
             throw err
         } finally {

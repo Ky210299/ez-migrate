@@ -14,14 +14,30 @@ import MakeSeed from "./use-cases/MakeSeed";
 import Seed from "./use-cases/Seed";
 import Baseline from "./use-cases/Baseline";
 import { openEditor } from "./utils";
+import { consoleLogger, LOG_FORMATS, LOG_LEVELS } from "./Logger";
+import { tracer } from "./Tracer";
 
 const program = new Command();
+
+/** Run a command as the root span of the trace */
+function traced<A extends Array<unknown>>(name: string, run: (...args: A) => unknown) {
+  return (...args: A) => tracer.span(`command ${name}`, {}, async () => { await run(...args) });
+}
 
 program
   .name("ez-migrate")
   .version(Version.get(), "-v, --version")
   .description("A simple migrations CLI tool")
-  .action(Status.run);
+  .option("--log-level <level>", `Log level: ${LOG_LEVELS.join(", ")} (env EZ_MIGRATE_LOG_LEVEL)`)
+  .option("--verbose", "Same as --log-level debug: logs every step with its duration")
+  .option("--log-format <format>", `Log format: ${LOG_FORMATS.join(", ")} (env EZ_MIGRATE_LOG_FORMAT)`)
+  .option("--trace", "Print how long each step took at the end (env EZ_MIGRATE_TRACE=1)")
+  .option("--trace-file <path>", "Write the timings as a Chrome trace file, to open in https://ui.perfetto.dev (env EZ_MIGRATE_TRACE_FILE)")
+  .hook("preAction", () => {
+    const { logLevel, verbose, logFormat } = program.opts();
+    consoleLogger.configure({ level: verbose ? "debug" : logLevel, format: logFormat });
+  })
+  .action(traced("status", Status.run));
 
 program
   .command("make <name>")
@@ -31,13 +47,13 @@ program
     "-e, --edit",
     "Automatically open the new file in your editor set it in $EDITOR",
   )
-  .action((name, options) => {
+  .action(traced("make", (name: string, options: { seed?: boolean, edit?: boolean }) => {
     const { seed, edit } = options;
     const filePath = seed ? MakeSeed.run(name) : Make.run(name);
     if (edit && filePath) {
       openEditor(filePath);
     }
-  });
+  }));
 
 program
   .command("seed")
@@ -45,23 +61,23 @@ program
   .option("-a, --all", "Run all seed files, also the ones already run")
   .option("--fake", "Record the pending seeds as run without running them")
   .option("-f, --file <path>", "Run only this SQL file, without recording it (for example a baseline data file)")
-  .action((options) => Seed.run(options));
+  .action(traced("seed", Seed.run));
 program
   .command("baseline")
   .description("Write the schema of an existing database as the first migration and mark it as applied")
   .option("-d, --data", "Also write the current data to a file ignored by git")
   .option("--data-path <folder>", "Folder of the data file", "./ez-migrate-data")
   .option("-n, --name <name>", "Name of the generated files", "baseline")
-  .action((options) => Baseline.run(options));
-program.command("down").description("Revert the last migration").action(async () => { await Down.run() });
-program.command("up").description("Apply the next pending migration").action(Up.run);
-program .command("init [path]") .description("Initialize migration setup") .action(Init.run);
-program .command("migrate") .description("Run all pending migrations") .action(Migrate.run);
-program.command("reset").description("Reset all migrations").action(Reset.run);
-program.command("redo").description("Redo the last migration").action(Redo.run);
-program .command("rollback") .description("Rollback the last migration batch") .action(Rollback.run);
-program .command("status") .description("Show migration status") .action(Status.run);
-program.command("list").description("Alias of status").action(Status.run);
-program.command("version").description("Show CLI version").action(Version.run);
+  .action(traced("baseline", Baseline.run));
+program.command("down").description("Revert the last migration").action(traced("down", () => Down.run()));
+program.command("up").description("Apply the next pending migration").action(traced("up", Up.run));
+program .command("init [path]") .description("Initialize migration setup") .action(traced("init", Init.run));
+program .command("migrate") .description("Run all pending migrations") .action(traced("migrate", Migrate.run));
+program.command("reset").description("Reset all migrations").action(traced("reset", Reset.run));
+program.command("redo").description("Redo the last migration").action(traced("redo", Redo.run));
+program .command("rollback") .description("Rollback the last migration batch") .action(traced("rollback", Rollback.run));
+program .command("status") .description("Show migration status") .action(traced("status", Status.run));
+program.command("list").description("Alias of status").action(traced("status", Status.run));
+program.command("version").description("Show CLI version").action(traced("version", Version.run));
 program.showHelpAfterError().showSuggestionAfterError();
 export default program;

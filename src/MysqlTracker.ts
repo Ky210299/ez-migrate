@@ -82,7 +82,7 @@ export default class MysqlTracker implements Persistency{
         const rollback: Rollback = async () => {
             await connection.rollback()
             connection.release()
-            consoleLogger.warn(`MySQL tracker rollback successfuly at ${action}`)
+            consoleLogger.debug(`MySQL tracker change rolled back (${action})`)
         }
         try {
             for (const { sql, values } of statements) await connection.execute(sql, values);

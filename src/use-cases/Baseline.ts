@@ -6,6 +6,7 @@ import { consoleLogger } from "../Logger";
 import SchemaDumper from "../SchemaDumper";
 import SchemasHandler from "../SchemasHandler";
 import TrackerFactory from "../TrackerFactory";
+import { tracer } from "../Tracer";
 
 /** Default folder of the data file. It has its own .gitignore so the data never reaches git */
 export const DEFAULT_DATA_PATH = "./ez-migrate-data";
@@ -53,7 +54,7 @@ export default class Baseline {
             }
             await connection.testConnection();
             const dumper = new SchemaDumper(connection, config.dialect);
-            const schema = await dumper.dumpSchema();
+            const schema = await tracer.span("baseline.schema", {}, () => dumper.dumpSchema());
             if (schema.tables.length === 0) {
                 throw new Error("The database has no tables. Nothing to baseline");
             }
@@ -63,7 +64,7 @@ export default class Baseline {
             let dataFile: string | null = null;
             let rows = 0;
             if (options.data) {
-                const data = await dumper.dumpData(schema.tables);
+                const data = await tracer.span("baseline.data", { tables: schema.tables.length }, () => dumper.dumpData(schema.tables));
                 rows = data.rows;
                 if (rows > 0) {
                     const dataPath = options.dataPath ?? DEFAULT_DATA_PATH;

@@ -1,12 +1,15 @@
 import { join } from "node:path";
 import { MIGRATIONS_DIALECTS } from "./constants"
-import MysqlConnection from "./mysql"
 import DatabaseConnector from "./DatabaseConnector"
 import { Config } from "./types";
-import SqliteConnection from "./sqlite";
 import { consoleLogger } from "./Logger";
-import PostgresConnectionImpl from "./Postgres";
 import { connectionDataFromEnv } from "./utils";
+
+/*
+ * The database drivers are loaded only for the dialect in use: loading mysql2
+ * and pg on every run made each command slower, also commands that don't connect.
+ */
+/* eslint-disable @typescript-eslint/no-require-imports */
 
 /** Create DBMS connections by they dialect. Throw if doesn't support the dialect */
 export default class ConnectionFactory {
@@ -16,6 +19,7 @@ export default class ConnectionFactory {
         switch (dialect) {
             case MIGRATIONS_DIALECTS.MYSQL: {
                 const { host, user, password, port, database } = connectionDataFromEnv(envKeys);
+                const MysqlConnection: typeof import("./mysql").default = require("./mysql").default;
                 const mysqlConnection = new MysqlConnection({ host, user, password, port, database, logger: consoleLogger})
                 return new DatabaseConnector(mysqlConnection, {logger: consoleLogger})
             }
@@ -23,11 +27,13 @@ export default class ConnectionFactory {
                 // For SQLite the "database" env var is the path of the database file
                 const { database } = connectionDataFromEnv(envKeys);
                 const path = database ?? join(config.sqlitePath, "database.db");
+                const SqliteConnection: typeof import("./sqlite").default = require("./sqlite").default;
                 const sqliteConnection = new SqliteConnection(path);
                 return new DatabaseConnector(sqliteConnection, {logger: consoleLogger})
             }
             case MIGRATIONS_DIALECTS.POSTGRES: {
                 const { host, user, password, port, database } = connectionDataFromEnv(envKeys);
+                const PostgresConnectionImpl: typeof import("./Postgres").default = require("./Postgres").default;
                 const postgresConnection = new PostgresConnectionImpl({ host, user, password, port, database, logger: consoleLogger });
                 return new DatabaseConnector(postgresConnection, { logger: consoleLogger });
             }
