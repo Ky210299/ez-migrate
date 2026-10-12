@@ -8,6 +8,22 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-10-12
+
+### Added
+- Lock: commands that change the database wait for each other, so two servers that run `migrate` at the same time don't apply the same migration twice. MySQL uses `GET_LOCK`, PostgreSQL an advisory lock, and a SQLite tracker a `tracker.db.lock` file (a lock left by a dead process on the same host is removed). `status` and `seed --file` don't take the lock.
+- Global option `--lock-timeout <seconds>` (env var `EZ_MIGRATE_LOCK_TIMEOUT`, default `60`, `0` fails at once).
+- `ssl` config key (and `tracker.ssl`) for MySQL and PostgreSQL: `true` to encrypt and check the certificate, or `{ ca, cert, key, rejectUnauthorized }` with paths of the certificate files.
+- `envKeys.url`: name of an env var with a connection URL (`mysql://`, `postgres://`). It reads `sslmode` / `ssl-mode`. The URL is never printed, not even in errors.
+- `--allow-changed` option for `migrate` and `up`.
+- Tests for the lock, SSL, connection URLs and changed migrations on every DBMS. The tests create a user that can only connect with SSL. The PostgreSQL test container uses a test-only certificate from `tests/fixtures/ssl`.
+
+### Changed
+- **Breaking:** `migrate` and `up` fail, without applying anything, if an applied migration file changed after it was applied. Before, they only applied the pending files and the change was silently lost. Put the file back, or use `--allow-changed` to run anyway.
+- `reset` and `redo` run under one lock from start to end, so no other run can apply migrations between the down and the up.
+- PostgreSQL: two runs creating the tracker database at the same time no longer fail.
+- SQLite tracker waits up to 5 s when another process writes it, instead of failing with `database is locked`.
+
 ## [0.9.0] - 2026-10-11
 
 ### Added

@@ -1,5 +1,6 @@
 import { createConnection, createPool } from "mysql2/promise";
-import type { PoolOptions, Pool } from "mysql2/promise";
+import type { Pool } from "mysql2/promise";
+import type { ConnectionData, TlsOptions } from "./ConnectionOptions";
 import { MySQLConnection, Row } from "./DatabaseConnector.js";
 import { ConsoleLoggerImpl } from "./Logger.js";
 import { describeTarget } from "./utils.js";
@@ -12,13 +13,15 @@ export default class MysqlConnection implements MySQLConnection {
     readonly password: string | undefined;
     readonly database: string | undefined;
     readonly port: string | number;
+    readonly ssl: TlsOptions | undefined;
     readonly logger: ConsoleLoggerImpl;
-    constructor({ user, password, port, database, host, logger }: PoolOptions & { logger: ConsoleLoggerImpl }) {
+    constructor({ user, password, port, database, host, ssl, logger }: ConnectionData & { logger: ConsoleLoggerImpl }) {
         this.host = host ?? "localhost";
         this.user = user ?? "root";
         this.password = password ?? "";
         this.port = port ?? 3306;
         this.database = database;
+        this.ssl = ssl;
         this.logger = logger
     }
 
@@ -30,6 +33,7 @@ export default class MysqlConnection implements MySQLConnection {
             user: this.user,
             password: this.password,
             port: Number(this.port),
+            ssl: this.ssl,
         };
         if (this.database != null) {
             const connection = await createConnection(options);

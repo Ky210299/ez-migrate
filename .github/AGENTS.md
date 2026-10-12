@@ -115,6 +115,7 @@ export default class Make {
 ### Configuration
 - Configuration file: `ez-migrate.json` (handled by `ConfigReader`)
 - Environment variables support with customizable keys
+- Connection data (env vars, `envKeys.url`, `ssl`) is built only in `src/ConnectionOptions.ts` (`connectionOptions`). Never print a connection URL or password, even in errors.
 - Default configurations in `src/constants.ts`
 
 ### Logging and tracing
@@ -123,6 +124,14 @@ export default class Make {
 - Never log or trace SQL text or values (they can contain personal data). Log file names and sizes instead. `tests/observability.test.ts` checks this.
 - Command output (like the `status` list) goes to `console.log`, not the logger.
 - Database drivers are loaded with `require` inside the factories so commands don't pay for drivers they don't use. Don't import `mysql2`, `pg` or the connection classes at the top of shared modules.
+
+### Locks and trackers
+- Commands that change the database run inside `withLockedTracker(config, fn)` from `src/TrackerSession.ts`. It creates the tracker, takes the lock (`Repository.withLock`), and always closes it.
+- One command takes one lock. A use case that another one reuses has two methods: `run` (takes the lock) and a static method that receives an already locked tracker (`Migrate.apply`, `Down.revertLast`). Call that method from other use cases, never `run`, or the command waits for its own lock.
+- Read-only commands (`status`) and `seed --file` don't take the lock.
+- `MigrationExecutor.close()` only closes the target connection. Whoever creates the tracker closes it.
+- `migrate` and `up` call `SchemasHandler.checkAppliedUnchanged` before applying anything.
+- Tests for locks, SSL and changed migrations are in `tests/safety.test.ts`. The SSL users and test certificate are in `tests/fixtures/`.
 
 ### CLI Patterns
 - All CLI commands are in `src/CLI.ts`

@@ -1,4 +1,4 @@
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -41,6 +41,12 @@ export interface Project {
     database: string;
     /** Run the built CLI inside the project directory */
     run: (...args: Array<string>) => RunResult;
+    /** Same as run, without blocking, to run several CLIs at the same time */
+    runAsync: (...args: Array<string>) => Promise<RunResult>;
+    /** Env vars passed to the CLI. Tests can change them */
+    env: Record<string, string>;
+    /** Merge keys into ez-migrate.json */
+    updateConfig: (changes: Record<string, unknown>) => void;
     /** Write a migration file with the ez-migrate template */
     addMigration: (name: string, up: string, down: string) => string;
     /** Write a seed file */
@@ -119,6 +125,22 @@ async function queryOn(dialect: Dialect, database: string, sqliteFile: string, s
     }
 }
 
+/**
+ * Creates ezm_ssl (password "ezmigrate"), a user that can only connect with SSL.
+ * On PostgreSQL it also needs a pg_hba.conf rule, so tests/fixtures/postgres-init
+ * creates it when the container starts.
+ */
+export async function createSslUser(dialect: "mysql" | "postgres") {
+    if (dialect !== "mysql") return;
+    const c = await createConnection({ ...DB.mysql });
+    try {
+        await c.query(`CREATE USER IF NOT EXISTS 'ezm_ssl'@'%' IDENTIFIED BY 'ezmigrate' REQUIRE SSL`);
+        await c.query("GRANT ALL PRIVILEGES ON *.* TO 'ezm_ssl'@'%'");
+    } finally {
+        await c.end();
+    }
+}
+
 async function createDatabase(dialect: Dialect, database: string) {
     if (dialect === "mysql") {
         const c = await createConnection({ ...DB.mysql });
@@ -168,6 +190,10 @@ export function createProject(dialect: Dialect, trackerDialect?: Dialect): Proje
         Object.assign(env, envFor(trackerDialect, "TRACKER", trackerDatabase));
     }
     writeFileSync(join(dir, "ez-migrate.json"), JSON.stringify(config, null, 4));
+    const updateConfig = (changes: Record<string, unknown>) => {
+        Object.assign(config, changes);
+        writeFileSync(join(dir, "ez-migrate.json"), JSON.stringify(config, null, 4));
+    };
 
     const run = (...args: Array<string>): RunResult => {
         const result = spawnSync(process.execPath, [CLI, ...args], {
@@ -178,6 +204,17 @@ export function createProject(dialect: Dialect, trackerDialect?: Dialect): Proje
         });
         return { code: result.status, output: `${result.stdout}${result.stderr}` };
     };
+
+    const runAsync = (...args: Array<string>) => new Promise<RunResult>((resolve) => {
+        const child = spawn(process.execPath, [CLI, ...args], {
+            cwd: dir,
+            env: { ...process.env, ...env, NO_COLOR: "1" },
+        });
+        let output = "";
+        child.stdout.on("data", (chunk) => { output += chunk });
+        child.stderr.on("data", (chunk) => { output += chunk });
+        child.on("close", (code) => resolve({ code, output }));
+    });
 
     const addMigration = (name: string, up: string, down: string) => {
         mkdirSync(join(dir, "migrations"), { recursive: true });
@@ -235,5 +272,5 @@ export function createProject(dialect: Dialect, trackerDialect?: Dialect): Proje
         if (trackerDialect) await dropDatabase(trackerDialect, trackerDatabase);
     };
 
-    return { dir, dialect, database, run, addMigration, addSeed, tables, query, tracked, seeded, setup, cleanup };
+    return { dir, dialect, database, run, runAsync, env, updateConfig, addMigration, addSeed, tables, query, tracked, seeded, setup, cleanup };
 }

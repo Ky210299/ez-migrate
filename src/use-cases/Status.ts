@@ -4,7 +4,6 @@ import SchemasHandler from "../SchemasHandler";
 import SeedHandler from "../SeedHandler";
 import TrackerFactory from "../TrackerFactory";
 import { consoleLogger } from "../Logger";
-import { normalizeSQL } from "../sql";
 import { stripTimestamp } from "../utils";
 
 export default class Status {
@@ -16,22 +15,15 @@ export default class Status {
     public static async run() {
         const config = new ConfigReader().getConfig();
         const schemaHandler = new SchemasHandler({ migrationsPath: config.migrationsPath });
-        const allMigrations = schemaHandler.getAllMigrations().map(m => schemaHandler.makeMigrationFromFile(m));
+        const allMigrations = schemaHandler.getAllMigrations();
         const tracker = TrackerFactory.create(config);
         try {
             const allMigrationsDone = await tracker.listMigrations();
-            const status = allMigrations.map((migration, i) => {
-                const { path, up } = migration.getDetails()
-                const name = basename(path)
-                const migrationDone = allMigrationsDone.find(m => basename(m.getDetails().path) === name);
-                const shortName = stripTimestamp(name);
-                let mark = "✘";
-                if (migrationDone != null) {
-                    // Compare without comments and spaces. Old versions stored the SQL normalized
-                    const changed = normalizeSQL(up) !== normalizeSQL(migrationDone.getDetails().up);
-                    mark = changed ? "⚠️" : "✔";
-                }
-                return `${i + 1} ${mark} - ${shortName}`;
+            const doneNames = new Set(allMigrationsDone.map(m => basename(m.getDetails().path)));
+            const changed = new Set(schemaHandler.findChangedMigrations(allMigrationsDone));
+            const status = allMigrations.map((path, i) => {
+                const mark = changed.has(path) ? "⚠️" : doneNames.has(basename(path)) ? "✔" : "✘";
+                return `${i + 1} ${mark} - ${stripTimestamp(basename(path))}`;
             });
             // The list is the output of the command, not a log line: print it whatever the log level or format
             console.log(status.length ? status.reverse().join("\n") : "No migrations");

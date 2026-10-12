@@ -6,6 +6,7 @@ import { basename } from "node:path";
 import Migration from "./Migration";
 import { isEmptySQL, normalizeSQL, stripStrings } from "./sql";
 import { fileTimestamp } from "./utils";
+import { consoleLogger } from "./Logger";
 
 type SchemaHandlerArguments = { migrationsPath: string };
 
@@ -228,6 +229,39 @@ export default class SchemasHandler {
         return this.getAllMigrations()
             .filter(path => !doneNames.has(basename(path)))
             .map(path => this.makeMigrationFromFile(path, batchId));
+    }
+
+    /**
+     * Applied migrations whose file changed after they were applied, as file paths.
+     * Comments and whitespace are ignored. Old versions stored the SQL normalized
+     */
+    findChangedMigrations(done: Array<Migration>): Array<string> {
+        const doneByName = new Map(done.map(m => [basename(m.getDetails().path), m.getDetails().up]));
+        return this.getAllMigrations().filter(path => {
+            const appliedUp = doneByName.get(basename(path));
+            if (appliedUp == null) return false;
+            const { up } = this.makeMigrationFromFile(path).getDetails();
+            return normalizeSQL(up) !== normalizeSQL(appliedUp);
+        });
+    }
+
+    /**
+     * Throws if an applied migration file changed, because the database would
+     * not match the files anymore. With allowChanged it only warns
+     */
+    checkAppliedUnchanged(done: Array<Migration>, allowChanged = false) {
+        const changed = this.findChangedMigrations(done).map(path => basename(path));
+        if (changed.length === 0) return;
+        const list = changed.map(name => `  - ${name}`).join("\n");
+        if (allowChanged) {
+            consoleLogger.warn(`Applied migrations changed after they were applied (allowed by --allow-changed):\n${list}`);
+            return;
+        }
+        throw new Error(
+            `Applied migrations changed after they were applied:\n${list}\n` +
+            "The database doesn't have these changes. Put the files back as they were and write the change in a new migration. " +
+            "Use --allow-changed to run anyway",
+        );
     }
 
     /** The migration file with the same name as the given migration, or null if it doesn't exist */

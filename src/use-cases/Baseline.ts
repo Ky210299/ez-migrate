@@ -5,7 +5,10 @@ import ConnectionFactory from "../ConnectionFactory";
 import { consoleLogger } from "../Logger";
 import SchemaDumper from "../SchemaDumper";
 import SchemasHandler from "../SchemasHandler";
-import TrackerFactory from "../TrackerFactory";
+import { withLockedTracker } from "../TrackerSession";
+import Repository from "../Repository";
+import DatabaseConnector from "../DatabaseConnector";
+import type { Config } from "../types";
 import { tracer } from "../Tracer";
 
 /** Default folder of the data file. It has its own .gitignore so the data never reaches git */
@@ -42,66 +45,75 @@ export default class Baseline {
 
     static async run(options: BaselineOptions = {}) {
         const config = new ConfigReader().getConfig();
-        const name = options.name ?? "baseline";
-        const schemaHandler = new SchemasHandler({ migrationsPath: config.migrationsPath });
-        const tracker = TrackerFactory.create(config);
         const connection = ConnectionFactory.create(config);
         const written: Array<string> = [];
         try {
-            const done = await tracker.listMigrations();
-            if (done.length > 0) {
-                throw new Error("The tracker already has applied migrations. baseline is only for databases that don't use ez-migrate yet");
-            }
-            await connection.testConnection();
-            const dumper = new SchemaDumper(connection, config.dialect);
-            const schema = await tracer.span("baseline.schema", {}, () => dumper.dumpSchema());
-            if (schema.tables.length === 0) {
-                throw new Error("The database has no tables. Nothing to baseline");
-            }
-
-            const migrationPath = schemaHandler.writeMigrationFile(name, schema.up, schema.down);
-            written.push(migrationPath);
-            let dataFile: string | null = null;
-            let rows = 0;
-            if (options.data) {
-                const data = await tracer.span("baseline.data", { tables: schema.tables.length }, () => dumper.dumpData(schema.tables));
-                rows = data.rows;
-                if (rows > 0) {
-                    const dataPath = options.dataPath ?? DEFAULT_DATA_PATH;
-                    Baseline.makeIgnoredFolder(dataPath);
-                    dataFile = join(dataPath, basename(migrationPath).replace(/\.sql$/, "-data.sql"));
-                    writeFileSync(dataFile, data.sql);
-                    written.push(dataFile);
-                }
-            }
-
-            // Read the file back so the tracked SQL is the same as the file and status doesn't mark it as changed
-            const migration = schemaHandler.makeMigrationFromFile(migrationPath);
-            if (schemaHandler.hasDML(migration.getDetails().up)) {
-                throw new Error("The generated schema has DML statements. Check the database objects");
-            }
-            await tracker.init();
-            await (await tracker.save([migration.getDetails()])).commit();
-
-            Baseline.consoleLogger.info(`Schema written to ${migrationPath} (${schema.tables.length} tables) and marked as applied`);
-            if (dataFile) {
-                Baseline.consoleLogger.info(
-                    `Data written to ${dataFile} (${rows} rows). It is ignored by git. Load it in another database with: ez-migrate seed --file ${dataFile}`,
-                );
-            }
-            else if (options.data) Baseline.consoleLogger.info("The tables have no rows. No seed file written");
-            if (schema.skipped.length > 0) {
-                Baseline.consoleLogger.warn(
-                    `Not exported, add them to a migration by hand if you need them:\n${schema.skipped.join("\n")}`,
-                );
-            }
+            await withLockedTracker(config, tracker => Baseline.write(config, tracker, connection, options, written));
         } catch (err) {
             // Don't leave files that are not tracked: the next migrate would run them on the same database
             for (const path of written) rmSync(path, { force: true });
             throw err;
         } finally {
             await connection.close().catch(() => {});
-            await tracker.close().catch(() => {});
+        }
+    }
+
+    /** Write the files (their paths are added to `written`) and record the migration as applied */
+    private static async write(
+        config: Config,
+        tracker: Repository,
+        connection: DatabaseConnector,
+        options: BaselineOptions,
+        written: Array<string>,
+    ) {
+        const name = options.name ?? "baseline";
+        const schemaHandler = new SchemasHandler({ migrationsPath: config.migrationsPath });
+        const done = await tracker.listMigrations();
+        if (done.length > 0) {
+            throw new Error("The tracker already has applied migrations. baseline is only for databases that don't use ez-migrate yet");
+        }
+        await connection.testConnection();
+        const dumper = new SchemaDumper(connection, config.dialect);
+        const schema = await tracer.span("baseline.schema", {}, () => dumper.dumpSchema());
+        if (schema.tables.length === 0) {
+            throw new Error("The database has no tables. Nothing to baseline");
+        }
+
+        const migrationPath = schemaHandler.writeMigrationFile(name, schema.up, schema.down);
+        written.push(migrationPath);
+        let dataFile: string | null = null;
+        let rows = 0;
+        if (options.data) {
+            const data = await tracer.span("baseline.data", { tables: schema.tables.length }, () => dumper.dumpData(schema.tables));
+            rows = data.rows;
+            if (rows > 0) {
+                const dataPath = options.dataPath ?? DEFAULT_DATA_PATH;
+                Baseline.makeIgnoredFolder(dataPath);
+                dataFile = join(dataPath, basename(migrationPath).replace(/\.sql$/, "-data.sql"));
+                writeFileSync(dataFile, data.sql);
+                written.push(dataFile);
+            }
+        }
+
+        // Read the file back so the tracked SQL is the same as the file and status doesn't mark it as changed
+        const migration = schemaHandler.makeMigrationFromFile(migrationPath);
+        if (schemaHandler.hasDML(migration.getDetails().up)) {
+            throw new Error("The generated schema has DML statements. Check the database objects");
+        }
+        await (await tracker.save([migration.getDetails()])).commit();
+
+        Baseline.consoleLogger.info(`Schema written to ${migrationPath} (${schema.tables.length} tables) and marked as applied`);
+        if (dataFile) {
+            Baseline.consoleLogger.info(
+                `Data written to ${dataFile} (${rows} rows). It is ignored by git. Load it in another database with: ez-migrate seed --file ${dataFile}`,
+            );
+        } else if (options.data) {
+            Baseline.consoleLogger.info("The tables have no rows. No data file written");
+        }
+        if (schema.skipped.length > 0) {
+            Baseline.consoleLogger.warn(
+                `Not exported, add them to a migration by hand if you need them:\n${schema.skipped.join("\n")}`,
+            );
         }
     }
 }

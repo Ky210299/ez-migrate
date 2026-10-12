@@ -1,8 +1,10 @@
-import { Pool, PoolConnection, createConnection, createPool, PoolOptions } from "mysql2/promise";
+import { Connection, Pool, PoolConnection, createConnection, createPool } from "mysql2/promise";
+import type { ConnectionData, TlsOptions } from "./ConnectionOptions";
 
 import { Persistency, TRACKER_SCHEMA, Commit, Rollback, TABLE_NAME, EXPECTED_SCHEMA, MIGRATION_COLUMNS, migrationValues, SEED_TABLE_NAME, SEED_TRACKER_SCHEMA, saveSeedsStatements } from "./Repository.js";
 import Migration, { MigrationData } from "./Migration.js";
 import { consoleLogger } from "./Logger.js";
+import { LockTimeoutError } from "./Lock.js";
 
 type DBMigrationData =
     Pick<MigrationData, "path" | "up" | "down">
@@ -23,14 +25,19 @@ export default class MysqlTracker implements Persistency{
     readonly password: string | undefined;
     readonly database: string;
     readonly port: number;
+    readonly ssl: TlsOptions | undefined;
     private db: Pool | null = null;
+    /** Connection that holds the lock. MySQL locks belong to a connection */
+    private lockConnection: Connection | null = null;
+    private databaseReady = false;
 
-    constructor({ user, password, port, host, database }: PoolOptions) {
+    constructor({ user, password, port, host, database, ssl }: ConnectionData) {
         this.host = host ?? "localhost";
         this.user = user ?? "root";
         this.password = password ?? "";
         this.port = port ?? 3306;
         this.database = database ?? this.MIGRATION_DATABASE;
+        this.ssl = ssl;
     }
 
     private get pool(): Pool {
@@ -54,18 +61,57 @@ export default class MysqlTracker implements Persistency{
         }
     }
 
-    async init() {
-        if (this.db != null) return;
-        const options = { host: this.host, user: this.user, password: this.password, port: this.port };
-        const connection = await createConnection(options);
+    private get options() {
+        return { host: this.host, user: this.user, password: this.password, port: this.port, ssl: this.ssl };
+    }
+
+    private async ensureDatabase() {
+        if (this.databaseReady) return;
+        const connection = await createConnection(this.options);
         try {
             await connection.query(`CREATE DATABASE IF NOT EXISTS \`${this.database.replace(/`/g, "``")}\``);
         } finally {
             await connection.end();
         }
-        this.db = createPool({ ...options, database: this.database, connectionLimit: 1 });
+        this.databaseReady = true;
+    }
+
+    async init() {
+        if (this.db != null) return;
+        await this.ensureDatabase();
+        this.db = createPool({ ...this.options, database: this.database, connectionLimit: 1 });
         await this.checkSchema();
         await this.pool.query(SEED_TRACKER_SCHEMA);
+    }
+
+    /** Lock name, unique per tracker database. MySQL allows 64 characters */
+    private get lockName() {
+        return `ez-migrate:${this.database}`.substring(0, 64);
+    }
+
+    async lock(timeoutMs: number) {
+        await this.ensureDatabase();
+        const connection = await createConnection({ ...this.options, database: this.database });
+        const [[{ got }]] = await connection.query(
+            "SELECT GET_LOCK(?, ?) AS got", [this.lockName, Math.ceil(timeoutMs / 1000)],
+        ) as unknown as [[{ got: number | null }]];
+        if (got !== 1) {
+            await connection.end();
+            throw new LockTimeoutError(timeoutMs);
+        }
+        this.lockConnection = connection;
+    }
+
+    async unlock() {
+        if (this.lockConnection == null) return;
+        const connection = this.lockConnection;
+        this.lockConnection = null;
+        try {
+            await connection.query("SELECT RELEASE_LOCK(?)", [this.lockName]);
+        } finally {
+            // Closing the connection also releases the lock
+            await connection.end();
+        }
     }
 
     /**
@@ -147,6 +193,7 @@ export default class MysqlTracker implements Persistency{
     }
 
     async close(): Promise<void>{
+        await this.unlock();
         await this.db?.end();
         this.db = null;
     };

@@ -37,7 +37,7 @@ export interface SqliteConnection extends Connection {
 export interface PostgresConnection extends Connection {
     host: string;
     user: string;
-    password: string | (() => string | Promise<string>);
+    password: string;
     database: string | undefined;
     port: string | number;
 }

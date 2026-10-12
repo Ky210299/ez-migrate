@@ -14,12 +14,14 @@ You write the SQL. ez-migrate runs it in order, records what was applied, and ca
 3. [Migration and seed files](#migration-and-seed-files)
 4. [Configuration](#configuration)
 5. [Commands](#commands)
-6. [Logs and traces](#logs-and-traces)
-7. [Adopt ez-migrate on an existing database](#adopt-ez-migrate-on-an-existing-database)
-8. [How tracking works](#how-tracking-works)
-9. [Advantages, disadvantages and use cases](#advantages-disadvantages-and-use-cases)
-10. [Development and tests](#development-and-tests)
-11. [Changelog](#changelog)
+6. [Running at the same time](#running-at-the-same-time)
+7. [Edited migrations](#edited-migrations)
+8. [Logs and traces](#logs-and-traces)
+9. [Adopt ez-migrate on an existing database](#adopt-ez-migrate-on-an-existing-database)
+10. [How tracking works](#how-tracking-works)
+11. [Advantages, disadvantages and use cases](#advantages-disadvantages-and-use-cases)
+12. [Development and tests](#development-and-tests)
+13. [Changelog](#changelog)
 
 ---
 
@@ -127,6 +129,8 @@ Add `-e` to `make` to open the new file in `$EDITOR`.
 | `seedsPath` | Folder of the seed files | `./seeds` |
 | `sqlitePath` | Folder of the SQLite tracker file `tracker.db` | `./migrations` |
 | `envKeys` | **Names** of the env vars with the connection data of the target database | `DB_*` |
+| `envKeys.url` | Optional. **Name** of an env var with a connection URL. See below | Not used |
+| `ssl` | Optional. SSL for MySQL and PostgreSQL. See below | No SSL |
 | `tracker` | Optional. Where to store the migrations history. See below | Same as the target |
 
 The connection data is read from the env vars named in `envKeys`. A `.env` file in the current folder is loaded if it exists:
@@ -141,6 +145,49 @@ DB_NAME=my_app
 
 - If the database doesn't exist, ez-migrate creates it (the user needs permission for that).
 - **SQLite:** only the `database` env var is used, and it is the path of the database file (`DB_NAME=./data/app.db`). Without it, `<sqlitePath>/database.db` is used.
+
+### Connection URL
+
+Many hosting services give one connection string. Add its env var name as `envKeys.url`:
+
+```json
+"envKeys": { "url": "DATABASE_URL", "user": "DB_USER", "password": "DB_PASSWORD", "port": "DB_PORT", "host": "DB_HOST", "database": "DB_NAME" }
+```
+
+```dotenv
+DATABASE_URL=postgres://app:secret@db.example.com:5432/my_app?sslmode=verify-full
+```
+
+- If that env var has a value, it is used and the other env vars are ignored. If it is empty, the other env vars are used.
+- Accepted: `mysql://`, `postgres://` and `postgresql://`. Special characters in the password must be URL-encoded.
+- SSL from the URL: `sslmode` (PostgreSQL) or `ssl-mode` (MySQL). `require` / `required` encrypts without checking the certificate; `verify-ca`, `verify-full`, `verify_ca`, `verify_identity` also check it. The `ssl` key below has priority over the URL.
+- The URL is never printed, not even in errors, because it has the password.
+
+### SSL
+
+```json
+{
+    "ssl": true
+}
+```
+
+- `true`: encrypts and checks the server certificate with the CAs that Node.js trusts.
+- An object to set the certificate files or turn off the check:
+
+```json
+{
+    "ssl": { "ca": "./certs/ca.pem", "cert": "./certs/client.pem", "key": "./certs/client-key.pem", "rejectUnauthorized": true }
+}
+```
+
+| Key | Description | Default |
+| --- | --- | --- |
+| `ca` | Path of the CA certificate of the server (for private or self-signed CAs) | Node.js CAs |
+| `cert`, `key` | Paths of the client certificate and key, if the server asks for them | None |
+| `rejectUnauthorized` | `false` encrypts but does not check the certificate. Use it only for tests | `true` |
+
+- `ssl` is not used with SQLite.
+- `ssl` is also used for the tracker when the tracker uses the same database. A tracker in another database has its own `tracker.ssl`.
 
 ### Tracker in another database
 
@@ -160,6 +207,7 @@ By default the history is stored in the table `ez_migration` of the target datab
 
 - `tracker.dialect` can be `mysql`, `postgres` or `sqlite`, different from the target.
 - With a SQLite tracker the history is in `<tracker.sqlitePath>/tracker.db` and `envKeys` are not used.
+- `tracker.envKeys.url` and `tracker.ssl` work the same as in the main config.
 
 ---
 
@@ -169,8 +217,8 @@ By default the history is stored in the table `ez_migration` of the target datab
 | --- | --- |
 | `init [folder]` | Creates `ez-migrate.json`. Does nothing if it exists. |
 | `make <name>` | Creates a migration file. `-s, --seed` creates a seed file. `-e, --edit` opens it in `$EDITOR`. |
-| `migrate` | Applies all pending migrations as one batch. |
-| `up` | Applies only the next pending migration (one batch). |
+| `migrate` | Applies all pending migrations as one batch. Stops if an applied file changed (see [Edited migrations](#edited-migrations)); `--allow-changed` runs anyway. |
+| `up` | Applies only the next pending migration (one batch). Same check and `--allow-changed` option as `migrate`. |
 | `down` | Reverts the last applied migration. |
 | `rollback` | Reverts all migrations of the last batch, newest first. |
 | `redo` | Reverts the last migration and applies the same file again. |
@@ -181,6 +229,38 @@ By default the history is stored in the table `ez_migration` of the target datab
 | `version` | Prints the version. Also `-v, --version`. |
 
 The CLI exits with code `0` on success and `1` on any error, so it can stop a deploy script or CI job.
+
+---
+
+## Running at the same time
+
+Commands that change the database (`migrate`, `up`, `down`, `rollback`, `redo`, `reset`, `seed`, `baseline`) take a lock on the tracker first. If two servers deploy at the same time, the second one waits until the first ends, then sees that there is nothing left to apply. No migration runs twice.
+
+| Option | Env var | What it does |
+| --- | --- | --- |
+| `--lock-timeout <seconds>` | `EZ_MIGRATE_LOCK_TIMEOUT` | How long to wait for the lock. Default `60`. `0` fails at once if another run has it. |
+
+- If the wait ends, the command fails with code `1`: `Another ez-migrate is changing this database (...). Waited 60 s.`
+- **MySQL:** `GET_LOCK`. **PostgreSQL:** advisory lock. Both are freed by the database if the process dies or the connection is lost.
+- **SQLite tracker:** a file `tracker.db.lock` next to `tracker.db`, with the process id and host. If that process is no longer running on the same host, the file is removed and the lock is taken. A lock file from another host is only removed by hand.
+- The lock is per tracker. Two projects with different tracker databases don't block each other.
+- `status` and `seed --file` don't take the lock.
+
+---
+
+## Edited migrations
+
+A file that was already applied should not change: the database has the old version, and other environments may have it too. `migrate` and `up` compare each applied file with the SQL saved in the tracker. If one changed, they stop before applying anything:
+
+```text
+Applied migrations changed after they were applied:
+  - 20260101000000000-users.sql
+The database doesn't have these changes. Put the files back as they were and write the change in a new migration. Use --allow-changed to run anyway
+```
+
+- Only the up section is compared. Comments, spaces and line breaks are ignored.
+- `--allow-changed` shows the same list as a warning and continues. The changed file is **not** applied again.
+- `status` marks these files with `⚠️`.
 
 ---
 
@@ -268,7 +348,7 @@ Notes:
 ## Advantages, disadvantages and use cases
 
 This section is updated with each version, based on what the tests and real use show.
-*Last review: 0.9.0.*
+*Last review: 0.10.0.*
 
 ### Advantages
 
@@ -279,7 +359,9 @@ This section is updated with each version, based on what the tests and real use 
 - **Safe on PostgreSQL and SQLite.** A failed migration leaves no partial changes.
 - **Flexible tracker.** The history can live in the same database, in a SQLite file, or in another server and DBMS.
 - **Schema and data are separated.** Migrations reject DML and seeds reject DDL, so data scripts don't hide in schema changes.
-- **Detects edited migrations.** `status` marks applied files that changed after being applied.
+- **Stops on edited migrations.** `migrate` and `up` fail if an applied file changed, so a change that never reached the database doesn't go unnoticed.
+- **Safe to run from several servers.** A lock on the tracker makes concurrent runs wait, so no migration runs twice.
+- **Connects to managed databases.** Connection URL and SSL with certificate checks, on MySQL and PostgreSQL.
 - **Seeds run once.** `seed` only runs new seed files, so it can run on every deploy.
 - **Easy to adopt.** `baseline` turns an existing database into a first migration in one command, on all three DBMS. The current data can be exported too, to a folder that git ignores.
 - **Works with branches.** Migrations merged later with an older name are still applied.
@@ -291,9 +373,9 @@ This section is updated with each version, based on what the tests and real use 
 - **No data migrations.** You can't run an `UPDATE` to fill a new column inside a migration. You need a seed or a separate script.
 - **Edited seeds don't run again.** A seed is recorded by file name. If you change a seed that already ran, create a new seed file or use `seed --all`.
 - **`baseline` has limits.** It doesn't export triggers, functions or procedures, and `--data` loads all rows in memory, so it is not for big databases.
-- **No lock.** Two `migrate` commands at the same time against the same database can both run the same migration. Run migrations from one place only.
 - **SQL is not portable.** A migration written for PostgreSQL may not run on MySQL.
-- **Limited connection options.** Only host, port, user, password and database from env vars. No connection URL and no SSL options yet, so some managed cloud databases that require SSL may not work.
+- **No dry run.** There is no option to see the SQL that `migrate` would run without running it. Use `status` to see the pending files.
+- **Not 1.0 yet.** The config and the CLI may still change between minor versions. Read the changelog before updating.
 - **CLI only.** There is no JavaScript API to run migrations from code.
 - **Needs Node.js 22.13+**.
 
@@ -304,16 +386,15 @@ This section is updated with each version, based on what the tests and real use 
 - PostgreSQL or SQLite projects, where each migration is atomic.
 - Creating and filling local and CI databases with `migrate` + `seed`.
 - Existing databases without versioned migrations: `baseline` gives them a starting point.
-- Services that each own one database and deploy from one pipeline.
+- Services deployed on several servers that run `migrate` on start: the lock makes them wait for each other.
+- Managed cloud databases that need SSL or a connection URL.
 - Prototypes with SQLite that may move to PostgreSQL later (with SQL rewritten where needed).
 
 ### Not recommended
 
-- Several apps or servers running migrations at the same time on the same database (no lock).
 - Projects that need data migrations (backfills, data transforms) as part of the migration history.
 - Critical MySQL databases with complex multi-statement migrations, unless you keep one DDL statement per migration.
 - Projects that must run the same migrations on several DBMS.
-- Databases that need SSL or connection strings to connect.
 - Running migrations from application code.
 - Copying big production databases with `baseline --data`. Use the DBMS backup tools for the data.
 - Databases whose logic lives in triggers and stored procedures, unless you add them to migrations by hand.

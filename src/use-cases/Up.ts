@@ -2,20 +2,22 @@ import ConfigReader from "../ConfigReader";
 import MigrationExecutor from "../MigrationExecutor";
 import SchemasHandler from "../SchemasHandler";
 import ConnectionFactory from "../ConnectionFactory";
-import TrackerFactory from "../TrackerFactory";
+import { withLockedTracker } from "../TrackerSession";
 import { consoleLogger } from "../Logger";
+import type { MigrateOptions } from "./Migrate";
 
 /** Class for running the Up use case */
 export default class Up {
     static consoleLogger = consoleLogger
 
     /** Execute the next pending migration */
-    public static async run() {
+    public static async run(options: MigrateOptions = {}) {
         const config = new ConfigReader().getConfig();
         const schemaHandler = new SchemasHandler({ migrationsPath: config.migrationsPath });
-        const tracker = TrackerFactory.create(config);
-        try {
-            const nextMigration = schemaHandler.getPendingMigrations(await tracker.listMigrations()).at(0);
+        await withLockedTracker(config, async tracker => {
+            const done = await tracker.listMigrations();
+            schemaHandler.checkAppliedUnchanged(done, options.allowChanged);
+            const nextMigration = schemaHandler.getPendingMigrations(done).at(0);
             if (nextMigration == null) {
                 Up.consoleLogger.info("There is not a next migration available");
                 return
@@ -29,8 +31,6 @@ export default class Up {
             } finally {
                 await migrationExecutor.close()
             }
-        } finally {
-            await tracker.close().catch(() => {})
-        }
+        });
     }
 }

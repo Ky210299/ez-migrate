@@ -1,10 +1,16 @@
-import { Client, ClientConfig, QueryResult } from "pg"
+import { Client, QueryResult } from "pg"
+import type { ConnectionData, TlsOptions } from "./ConnectionOptions";
 import { consoleLogger } from "./Logger.js";
-
+import { acquireWithRetry } from "./Lock.js";
 import { Persistency, TRACKER_SCHEMA, Commit, Rollback, TABLE_NAME, EXPECTED_SCHEMA, MIGRATION_COLUMNS, migrationValues, SEED_TABLE_NAME, SEED_TRACKER_SCHEMA, saveSeedsStatements } from "./Repository.js";
 import Migration, { MigrationData } from "./Migration.js";
 import { MigrateError } from "./Errors.js";
 import DialectTranslator, { TranslatableKeyword } from "./DialectTraductor.js";
+
+/** Key of the advisory lock. Advisory locks are per database, so it is per tracker database */
+const LOCK_KEY = [0x657a, 0x6d67] as const;
+/** Postgres error code when a database already exists (created by another process at the same time) */
+const DUPLICATE_DATABASE = "42P04";
 
 type DBMigrationData =
     Pick<MigrationData, "path" | "up" | "down">
@@ -21,16 +27,21 @@ export default class PGTracker implements Persistency {
     readonly DBMSName: string = "postgres";
     readonly host: string;
     readonly user: string;
-    readonly password: string | (() => string | Promise<string>);
+    readonly password: string;
     readonly database: string;
     readonly port: number;
+    readonly ssl: TlsOptions | undefined;
     private db: Client | null = null;
-    constructor({ user, password, port, host, database }: ClientConfig) {
+    private schemaReady = false;
+    private locked = false;
+
+    constructor({ user, password, port, host, database, ssl }: ConnectionData) {
         this.host = host ?? "localhost";
         this.user = user ?? "postgres";
         this.password = password ?? "";
         this.port = port ?? 5432;
         this.database = database ?? "postgres";
+        this.ssl = ssl;
     }
 
     private newClient(database: string) {
@@ -40,6 +51,7 @@ export default class PGTracker implements Persistency {
             password: this.password,
             port: this.port,
             database,
+            ssl: this.ssl,
         });
     }
 
@@ -56,8 +68,12 @@ export default class PGTracker implements Persistency {
         try {
             const { rowCount } = await admin.query("SELECT 1 FROM pg_database WHERE datname = $1", [this.database]);
             if (!rowCount) {
-                await admin.query(`CREATE DATABASE "${this.database.replace(/"/g, '""')}"`);
-                consoleLogger.info(`"${this.database}" database created`)
+                try {
+                    await admin.query(`CREATE DATABASE "${this.database.replace(/"/g, '""')}"`);
+                    consoleLogger.info(`"${this.database}" database created`)
+                } catch (err) {
+                    if ((err as { code?: string }).code !== DUPLICATE_DATABASE) throw err;
+                }
             }
         } finally {
             await admin.end();
@@ -83,14 +99,35 @@ export default class PGTracker implements Persistency {
         }
     }
     
-    async init() {
-        if (this.db != null) return
+    private async connect() {
+        if (this.db != null) return;
         await this.ensureTrackerDatabase();
         const client = this.newClient(this.database);
         await client.connect();
         this.db = client;
+    }
+
+    async init() {
+        await this.connect();
+        if (this.schemaReady) return;
         await this.checkSchema();
         await this.client.query(SEED_TRACKER_SCHEMA);
+        this.schemaReady = true;
+    }
+
+    async lock(timeoutMs: number) {
+        await this.connect();
+        await acquireWithRetry(async () => {
+            const { rows } = await this.client.query("SELECT pg_try_advisory_lock($1, $2) AS got", [...LOCK_KEY]);
+            return rows[0].got === true;
+        }, timeoutMs);
+        this.locked = true;
+    }
+
+    async unlock() {
+        if (!this.locked || this.db == null) return;
+        this.locked = false;
+        await this.client.query("SELECT pg_advisory_unlock($1, $2)", [...LOCK_KEY]);
     }
 
     /** Begins a transaction, runs the statement and returns the commit and rollback functions */
@@ -166,8 +203,11 @@ export default class PGTracker implements Persistency {
         return this.inTransaction(saveSeedsStatements(names, seededAt, (i) => `$${i}`), "save seeds");
     }
 
-    async close(): Promise<void> { 
+    async close(): Promise<void> {
+        // Closing the connection also releases the lock
         await this.db?.end()
         this.db = null;
+        this.locked = false;
+        this.schemaReady = false;
     };
 }

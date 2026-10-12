@@ -124,6 +124,14 @@ export interface Persistency {
     /** Begins a transaction that records the seeds as run and returns the commit and rollback functions */
     saveSeeds: (names: Array<string>, seededAt: string) => Promise<{ commit: Commit; rollback: Rollback }>
     
+    /**
+     * Wait until no other ez-migrate holds the lock of this tracker, then take it.
+     * Throws LockTimeoutError after timeoutMs. The lock is released by unlock or
+     * when the connection closes, also if the process dies
+     */
+    lock: (timeoutMs: number) => Promise<void>
+    unlock: () => Promise<void>
+
     init: () => Promise<void>
     close: () => Promise<void>
 }
@@ -164,6 +172,17 @@ export default class Repository {
 
     async init() {
         await tracer.span("tracker.init", {}, () => this.persistency.init());
+    }
+
+    /** Run fn holding the tracker lock, so two ez-migrate never change the same database at once */
+    async withLock<T>(timeoutMs: number, fn: () => Promise<T>): Promise<T> {
+        await tracer.span("tracker.lock", { timeoutMs }, () => this.persistency.lock(timeoutMs));
+        try {
+            await this.init();
+            return await fn();
+        } finally {
+            await tracer.span("tracker.unlock", {}, () => this.persistency.unlock());
+        }
     }
     
     private closed = false;
