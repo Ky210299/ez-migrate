@@ -37,6 +37,7 @@ export default class ConfigReader {
         if (userConfig.tracker == null) {
             this.config.tracker.dialect = userConfig.dialect ?? DEFAULT_CONFIG.dialect
             this.config.tracker.sqlitePath = userConfig.sqlitePath ?? DEFAULT_CONFIG.sqlitePath
+            this.config.tracker.ssl = userConfig.ssl
             this.config.tracker.envKeys = {
                 ...this.config.envKeys
             };

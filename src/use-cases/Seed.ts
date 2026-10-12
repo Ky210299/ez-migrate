@@ -4,7 +4,7 @@ import { consoleLogger } from "../Logger";
 import Migration from "../Migration";
 import SeedExecutor from "../SeedExecutor";
 import SeedHandler from "../SeedHandler"
-import TrackerFactory from "../TrackerFactory";
+import { withLockedTracker } from "../TrackerSession";
 
 export type SeedOptions = {
     /** Run every seed file, also the ones already run */
@@ -43,8 +43,7 @@ export default class Seed {
         if (options.file) return Seed.runFile(options.file);
         const config = new ConfigReader().getConfig()
         const seeds = new SeedHandler(config).getSeeds();
-        const tracker = TrackerFactory.create(config);
-        try {
+        await withLockedTracker(config, async tracker => {
             const done = new Set(options.all ? [] : await tracker.listSeeds());
             const pending = seeds.filter(seed => !done.has(seed.name));
             if (pending.length === 0) {
@@ -52,7 +51,6 @@ export default class Seed {
                 return
             }
             const names = pending.map(seed => seed.name);
-            await tracker.init();
             const { commit, rollback } = await tracker.saveSeeds(names, Migration.getPreciseNow());
             if (options.fake) {
                 await commit();
@@ -70,8 +68,6 @@ export default class Seed {
             }
             await commit();
             Seed.consoleLogger.info(`Seeds run:\n${names.join("\n")}`);
-        } finally {
-            await tracker.close().catch(() => {})
-        }
+        });
     }
 }

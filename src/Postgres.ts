@@ -1,5 +1,6 @@
 import { Client } from "pg";
-import type { ClientConfig, CustomTypesConfig } from "pg";
+import type { CustomTypesConfig } from "pg";
+import type { ConnectionData, TlsOptions } from "./ConnectionOptions";
 import { ConsoleLoggerImpl } from "./Logger";
 import { PostgresConnection, Row } from "./DatabaseConnector";
 import { describeTarget } from "./utils";
@@ -8,9 +9,10 @@ export default class PostgresConnectionImpl implements PostgresConnection{
     readonly DBMSName: string = "postgres";
     readonly host: string;
     readonly user: string;
-    readonly password: string | (() => string | Promise<string>);
+    readonly password: string;
     database: string | undefined;
     readonly port: string | number;
+    readonly ssl: TlsOptions | undefined;
     readonly logger: ConsoleLoggerImpl;
     
     private client: Client | null = null;
@@ -21,13 +23,15 @@ export default class PostgresConnectionImpl implements PostgresConnection{
         port,
         database,
         host,
+        ssl,
         logger,
-    }: ClientConfig & { logger: ConsoleLoggerImpl }) {
+    }: ConnectionData & { logger: ConsoleLoggerImpl }) {
         this.host = host ?? "localhost";
         this.user = user ?? "postgres";
         this.password = password ?? "";
         this.port = port ?? 5432;
         this.database = database;
+        this.ssl = ssl;
         this.logger = logger;
     }
 
@@ -38,6 +42,7 @@ export default class PostgresConnectionImpl implements PostgresConnection{
             password: this.password,
             port: Number(this.port),
             database,
+            ssl: this.ssl,
         });
     }
 

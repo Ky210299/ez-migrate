@@ -3,7 +3,7 @@ import { MIGRATIONS_DIALECTS } from "./constants"
 import DatabaseConnector from "./DatabaseConnector"
 import { Config } from "./types";
 import { consoleLogger } from "./Logger";
-import { connectionDataFromEnv } from "./utils";
+import { connectionOptions } from "./ConnectionOptions";
 
 /*
  * The database drivers are loaded only for the dialect in use: loading mysql2
@@ -18,23 +18,21 @@ export default class ConnectionFactory {
         const { dialect, envKeys } = config
         switch (dialect) {
             case MIGRATIONS_DIALECTS.MYSQL: {
-                const { host, user, password, port, database } = connectionDataFromEnv(envKeys);
                 const MysqlConnection: typeof import("./mysql").default = require("./mysql").default;
-                const mysqlConnection = new MysqlConnection({ host, user, password, port, database, logger: consoleLogger})
+                const mysqlConnection = new MysqlConnection({ ...connectionOptions(envKeys, config.ssl), logger: consoleLogger })
                 return new DatabaseConnector(mysqlConnection, {logger: consoleLogger})
             }
             case MIGRATIONS_DIALECTS.SQLITE: {
                 // For SQLite the "database" env var is the path of the database file
-                const { database } = connectionDataFromEnv(envKeys);
+                const { database } = connectionOptions(envKeys);
                 const path = database ?? join(config.sqlitePath, "database.db");
                 const SqliteConnection: typeof import("./sqlite").default = require("./sqlite").default;
                 const sqliteConnection = new SqliteConnection(path);
                 return new DatabaseConnector(sqliteConnection, {logger: consoleLogger})
             }
             case MIGRATIONS_DIALECTS.POSTGRES: {
-                const { host, user, password, port, database } = connectionDataFromEnv(envKeys);
                 const PostgresConnectionImpl: typeof import("./Postgres").default = require("./Postgres").default;
-                const postgresConnection = new PostgresConnectionImpl({ host, user, password, port, database, logger: consoleLogger });
+                const postgresConnection = new PostgresConnectionImpl({ ...connectionOptions(envKeys, config.ssl), logger: consoleLogger });
                 return new DatabaseConnector(postgresConnection, { logger: consoleLogger });
             }
             default: {

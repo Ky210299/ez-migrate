@@ -1,5 +1,4 @@
 import { existsSync } from "node:fs";
-import type { Config } from "./types";
 import { spawnSync } from "node:child_process";
 
 export function openEditor(filePath: string): void {
@@ -29,20 +28,6 @@ export function loadEnv() {
   if (envLoaded) return;
   envLoaded = true;
   if (existsSync(".env")) process.loadEnvFile(".env");
-}
-
-/** Read the connection data from the environment variables named in envKeys */
-export function connectionDataFromEnv(envKeys: Config["envKeys"]) {
-  loadEnv();
-  const { env: ENV } = process;
-  const port = ENV[envKeys.port];
-  return {
-    host: ENV[envKeys.host],
-    user: ENV[envKeys.user],
-    password: ENV[envKeys.password],
-    port: port ? Number(port) : undefined,
-    database: ENV[envKeys.database],
-  };
 }
 
 /** Log line that says which database and migration are used */

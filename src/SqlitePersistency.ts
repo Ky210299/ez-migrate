@@ -6,6 +6,7 @@ import Migration, { MigrationData } from "./Migration.js";
 
 import type { DatabaseSync } from "node:sqlite";
 import { consoleLogger } from "./Logger.js";
+import { FileLock } from "./Lock.js";
 
 type DBMigrationData =
     Pick<MigrationData, "path" | "up" | "down"> 
@@ -20,6 +21,7 @@ function toMigration(m: DBMigrationData) {
 export default class SqlitePersistency implements Persistency {
     private readonly MIGRATION_TABLE = TABLE_NAME;
     private readonly db: DatabaseSync;
+    private readonly lockFile: FileLock;
     
     private checkSchema() {
         const query = this.db.prepare(`
@@ -43,11 +45,23 @@ export default class SqlitePersistency implements Persistency {
     /** Stores the tracker in <trackerPath>/tracker.db */
     constructor({ trackerPath }: SqlitePersistencyArguments) {
         mkdirSync(trackerPath, { recursive: true });
-        this.db = new sqlite.DatabaseSync(join(trackerPath, "tracker.db"));
+        const file = join(trackerPath, "tracker.db");
+        this.db = new sqlite.DatabaseSync(file);
+        // Wait instead of failing when another process writes the file at the same time
+        this.db.exec("PRAGMA busy_timeout = 5000");
+        this.lockFile = new FileLock(`${file}.lock`);
         this.checkSchema()
         this.db.exec(SEED_TRACKER_SCHEMA)
     }
     async init() {
+    }
+
+    async lock(timeoutMs: number) {
+        await this.lockFile.acquire(timeoutMs);
+    }
+
+    async unlock() {
+        await this.lockFile.release();
     }
 
     /** Begins a transaction, runs the statement and returns the commit and rollback functions */

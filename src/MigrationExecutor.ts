@@ -82,11 +82,9 @@ class MigrationExecutor {
         await this.executeMigrationsDown(migrations);
     }
     
-    /**
-     * Close the tracker and connection
-    */
+    /** Close the database connection. The tracker is closed by whoever created it */
     async close() {
-        await Promise.allSettled([this.dbconnector.close(), this.tracker.close()]);
+        await this.dbconnector.close();
     }
 }
 

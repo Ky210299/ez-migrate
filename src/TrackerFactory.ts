@@ -2,7 +2,7 @@ import { TRACKER_DIALECTS } from "./constants";
 import Repository from "./Repository";
 
 import { Config } from "./types";
-import { connectionDataFromEnv } from "./utils";
+import { connectionOptions } from "./ConnectionOptions";
 
 /* eslint-disable @typescript-eslint/no-require-imports */
 // Drivers are loaded only for the tracker dialect in use (see ConnectionFactory)
@@ -13,7 +13,7 @@ export default class TrackerFactory {
         throw new Error("PersistencyFactory is a static class. Not constructor allow");
     }
     static create(config: Config) {
-        const { dialect, envKeys } = config.tracker;
+        const { dialect, envKeys, ssl } = config.tracker;
         
         switch (dialect) {
             case TRACKER_DIALECTS.SQLITE: {
@@ -23,15 +23,13 @@ export default class TrackerFactory {
                 return new Repository(sqlitePersistency);
             };
             case TRACKER_DIALECTS.MYSQL: {
-                const { host, user, password, port, database } = connectionDataFromEnv(envKeys);
                 const MysqlTracker: typeof import("./MysqlTracker").default = require("./MysqlTracker").default;
-                const mysqlConnection = new MysqlTracker({ host, user, password, port, database, })
+                const mysqlConnection = new MysqlTracker(connectionOptions(envKeys, ssl))
                 return new Repository(mysqlConnection)
             }
             case TRACKER_DIALECTS.POSTGRES: {
-                const { host, user, password, port, database } = connectionDataFromEnv(envKeys);
                 const PGTracker: typeof import("./PostgresTracker").default = require("./PostgresTracker").default;
-                const pgConnection = new PGTracker({ host, user, password, port, database })
+                const pgConnection = new PGTracker(connectionOptions(envKeys, ssl))
                 return new Repository(pgConnection)
             }
             default: {
