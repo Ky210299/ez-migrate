@@ -16,7 +16,7 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 - `ssl` config key (and `tracker.ssl`) for MySQL and PostgreSQL: `true` to encrypt and check the certificate, or `{ ca, cert, key, rejectUnauthorized }` with paths of the certificate files.
 - `envKeys.url`: name of an env var with a connection URL (`mysql://`, `postgres://`). It reads `sslmode` / `ssl-mode`. The URL is never printed, not even in errors.
 - `--allow-changed` option for `migrate` and `up`.
-- Tests for the lock, SSL, connection URLs and changed migrations on every DBMS. The Docker test databases now have an SSL-only user (`tests/fixtures/`, test certificate only).
+- Tests for the lock, SSL, connection URLs and changed migrations on every DBMS. The tests create a user that can only connect with SSL. The PostgreSQL test container uses a test-only certificate from `tests/fixtures/ssl`.
 
 ### Changed
 - **Breaking:** `migrate` and `up` fail, without applying anything, if an applied migration file changed after it was applied. Before, they only applied the pending files and the change was silently lost. Put the file back, or use `--allow-changed` to run anyway.

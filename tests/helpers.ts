@@ -125,6 +125,22 @@ async function queryOn(dialect: Dialect, database: string, sqliteFile: string, s
     }
 }
 
+/**
+ * Creates ezm_ssl (password "ezmigrate"), a user that can only connect with SSL.
+ * On PostgreSQL it also needs a pg_hba.conf rule, so tests/fixtures/postgres-init
+ * creates it when the container starts.
+ */
+export async function createSslUser(dialect: "mysql" | "postgres") {
+    if (dialect !== "mysql") return;
+    const c = await createConnection({ ...DB.mysql });
+    try {
+        await c.query(`CREATE USER IF NOT EXISTS 'ezm_ssl'@'%' IDENTIFIED BY 'ezmigrate' REQUIRE SSL`);
+        await c.query("GRANT ALL PRIVILEGES ON *.* TO 'ezm_ssl'@'%'");
+    } finally {
+        await c.end();
+    }
+}
+
 async function createDatabase(dialect: Dialect, database: string) {
     if (dialect === "mysql") {
         const c = await createConnection({ ...DB.mysql });

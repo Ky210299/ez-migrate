@@ -10,9 +10,7 @@ services:
       - "33306:3306"
     tmpfs:
       - /var/lib/mysql
-    volumes:
-      # MySQL creates its own certificates. This adds a user that requires SSL
-      - ./tests/fixtures/mysql-init:/docker-entrypoint-initdb.d:ro
+    # MySQL creates its own certificates. The SSL test user is created by the tests
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-pezmigrate"]
       interval: 2s

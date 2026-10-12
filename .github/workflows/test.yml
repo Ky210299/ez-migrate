@@ -20,6 +20,9 @@ jobs:
         run: docker compose up -d --wait
       - run: pnpm run lint
       - run: pnpm test
+      - name: Database logs
+        if: failure()
+        run: docker compose logs
       - name: Stop test databases
         if: always()
         run: docker compose down

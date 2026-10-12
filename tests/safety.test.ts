@@ -1,10 +1,10 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { hostname } from "node:os";
 import { join, resolve } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 
-import { createProject, DB, Dialect, DIALECTS, Project } from "./helpers";
+import { createProject, createSslUser, DB, Dialect, DIALECTS, Project } from "./helpers";
 
 const USERS_UP = "CREATE TABLE users (id INTEGER PRIMARY KEY, name VARCHAR(50));";
 const USERS_DOWN = "DROP TABLE users;";
@@ -139,6 +139,8 @@ describe.each(DIALECTS)("changed migrations [%s]", (dialect) => {
 });
 
 describe.each(["mysql", "postgres"] as const)("SSL and connection URL [%s]", (dialect) => {
+    beforeAll(() => createSslUser(dialect));
+
     /** Project whose database user (ezm_ssl) can only connect with SSL */
     function sslProject(ssl?: unknown) {
         const p = project(dialect);
