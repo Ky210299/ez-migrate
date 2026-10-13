@@ -75,3 +75,8 @@ export function normalizeSQL(sql: string): string {
 export function isEmptySQL(sql: string): boolean {
     return normalizeSQL(sql).replace(/;/g, "").trim() === "";
 }
+
+/** Number of statements in the SQL. Semicolons inside quotes and comments are not counted */
+export function countStatements(sql: string): number {
+    return stripStrings(normalizeSQL(sql)).split(";").filter(s => s.trim() !== "").length;
+}

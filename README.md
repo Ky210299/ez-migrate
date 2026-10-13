@@ -217,10 +217,10 @@ By default the history is stored in the table `ez_migration` of the target datab
 | --- | --- |
 | `init [folder]` | Creates `ez-migrate.json`. Does nothing if it exists. |
 | `make <name>` | Creates a migration file. `-s, --seed` creates a seed file. `-e, --edit` opens it in `$EDITOR`. |
-| `migrate` | Applies all pending migrations as one batch. Stops if an applied file changed (see [Edited migrations](#edited-migrations)); `--allow-changed` runs anyway. |
-| `up` | Applies only the next pending migration (one batch). Same check and `--allow-changed` option as `migrate`. |
-| `down` | Reverts the last applied migration. |
-| `rollback` | Reverts all migrations of the last batch, newest first. |
+| `migrate` | Applies all pending migrations as one batch. Stops if an applied file changed (see [Edited migrations](#edited-migrations)); `--allow-changed` runs anyway. `--dry-run` prints the SQL without running it. |
+| `up` | Applies only the next pending migration (one batch). Same `--allow-changed` and `--dry-run` options as `migrate`. |
+| `down` | Reverts the last applied migration. `--dry-run` prints the SQL without running it. |
+| `rollback` | Reverts all migrations of the last batch, newest first. `--dry-run` prints the SQL without running it. |
 | `redo` | Reverts the last migration and applies the same file again. |
 | `reset` | Reverts all applied migrations, newest first, then runs `migrate`. |
 | `status` | Lists the migration files (`✔` applied, `✘` pending, `⚠️` applied but the file changed after) and the seed files (`✔` run, `✘` pending). Also `list` or no command. |
@@ -229,6 +229,26 @@ By default the history is stored in the table `ez_migration` of the target datab
 | `version` | Prints the version. Also `-v, --version`. |
 
 The CLI exits with code `0` on success and `1` on any error, so it can stop a deploy script or CI job.
+
+### Dry run
+
+`--dry-run` on `migrate`, `up`, `down` and `rollback` prints the SQL the command would run, in order, and runs nothing:
+
+```text
+$ ez-migrate migrate --dry-run
+-- Dry run: nothing was run. 2 migrations would be applied, in this order:
+
+-- 20260101000000000-users.sql (up)
+CREATE TABLE users (id INTEGER PRIMARY KEY);
+
+-- 20260102000000000-posts.sql (up)
+CREATE TABLE posts (id INTEGER PRIMARY KEY);
+```
+
+- It does the same checks as the real run, so it also fails on [edited migrations](#edited-migrations) and on DML in migrations.
+- `down` and `rollback` print the down SQL saved in the tracker, which is what they would run.
+- It doesn't connect to the target database (only to the tracker) and doesn't take the lock.
+- The SQL is the output of the command, on stdout. It is never written to the logs.
 
 ---
 
@@ -341,19 +361,22 @@ Notes:
 - `down`, `rollback` and `reset` use the **down SQL saved in the table**, not the current file. Editing a file after applying it does not change how it is reverted.
 - Each migration is applied and tracked on its own. If migration 3 of 5 fails, migrations 1 and 2 stay applied and tracked, and the command stops with code `1`.
 - **PostgreSQL and SQLite:** a migration runs in a transaction. If any statement fails, none of its changes stay.
-- **MySQL:** `CREATE`, `ALTER` and `DROP` are committed by MySQL one by one. If the second statement of a migration fails, the first stays applied but the migration is not tracked. Fix it by hand, or keep one DDL statement per migration.
+- **MySQL:** `CREATE`, `ALTER` and `DROP` are committed by MySQL one by one. If the second statement of a migration fails, the first stays applied but the migration is not tracked. Keep one DDL statement per migration to avoid this. ez-migrate helps with it:
+  - Before running a migration with more than one statement, it warns: `Migration <file> (up) is not atomic. It has 2 statements...`. `--dry-run` shows the same note.
+  - If such a migration fails, the error says that the statements before the error stayed applied and must be undone by hand before running it again.
 
 ---
 
 ## Advantages, disadvantages and use cases
 
 This section is updated with each version, based on what the tests and real use show.
-*Last review: 0.10.0.*
+*Last review: 0.11.0.*
 
 ### Advantages
 
 - **Plain SQL.** No ORM, no DSL, no JavaScript in migrations. You write exactly what the database runs.
 - **Small and fast.** One CLI, one JSON config, three runtime dependencies. A command starts in about 70 ms, and only the driver of the database in use is loaded.
+- **See before you run.** `--dry-run` prints the exact SQL that `migrate`, `up`, `down` or `rollback` would run.
 - **Easy to debug.** `--trace` shows the time of each step and `--verbose` logs every step, without printing your SQL or data.
 - **Up and down in one file.** Easy to review in a pull request.
 - **Safe on PostgreSQL and SQLite.** A failed migration leaves no partial changes.
@@ -369,12 +392,11 @@ This section is updated with each version, based on what the tests and real use 
 
 ### Disadvantages
 
-- **MySQL migrations are not atomic.** A migration with several DDL statements can be left half applied. See [How tracking works](#how-tracking-works).
+- **MySQL migrations are not atomic.** A migration with several DDL statements can be left half applied. ez-migrate warns before running it and says what to undo if it fails, but it can't undo it for you. See [How tracking works](#how-tracking-works).
 - **No data migrations.** You can't run an `UPDATE` to fill a new column inside a migration. You need a seed or a separate script.
 - **Edited seeds don't run again.** A seed is recorded by file name. If you change a seed that already ran, create a new seed file or use `seed --all`.
 - **`baseline` has limits.** It doesn't export triggers, functions or procedures, and `--data` loads all rows in memory, so it is not for big databases.
 - **SQL is not portable.** A migration written for PostgreSQL may not run on MySQL.
-- **No dry run.** There is no option to see the SQL that `migrate` would run without running it. Use `status` to see the pending files.
 - **Not 1.0 yet.** The config and the CLI may still change between minor versions. Read the changelog before updating.
 - **CLI only.** There is no JavaScript API to run migrations from code.
 - **Needs Node.js 22.13+**.

@@ -2,7 +2,7 @@ import { basename } from "node:path";
 import ConfigReader from "../ConfigReader";
 import SchemasHandler from "../SchemasHandler";
 import SeedHandler from "../SeedHandler";
-import TrackerFactory from "../TrackerFactory";
+import { withTracker } from "../TrackerSession";
 import { consoleLogger } from "../Logger";
 import { stripTimestamp } from "../utils";
 
@@ -16,8 +16,7 @@ export default class Status {
         const config = new ConfigReader().getConfig();
         const schemaHandler = new SchemasHandler({ migrationsPath: config.migrationsPath });
         const allMigrations = schemaHandler.getAllMigrations();
-        const tracker = TrackerFactory.create(config);
-        try {
+        await withTracker(config, async tracker => {
             const allMigrationsDone = await tracker.listMigrations();
             const doneNames = new Set(allMigrationsDone.map(m => basename(m.getDetails().path)));
             const changed = new Set(schemaHandler.findChangedMigrations(allMigrationsDone));
@@ -34,8 +33,6 @@ export default class Status {
                 const seedStatus = seeds.map(name => `${seedsDone.has(name) ? "✔" : "✘"} - ${stripTimestamp(name)}`);
                 console.log("\nSeeds:\n" + seedStatus.join("\n"));
             }
-        } finally {
-            await tracker.close()
-        }
+        });
     }
 }

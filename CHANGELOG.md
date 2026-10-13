@@ -8,6 +8,15 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-10-13
+
+### Added
+- `--dry-run` on `migrate`, `up`, `down` and `rollback`: prints the SQL that would run, in order, and runs nothing. It does the same checks as the real run. It doesn't connect to the target database or take the lock.
+- MySQL: a warning before running a migration with more than one statement, because MySQL commits each DDL statement on its own and the migration can be left half applied. `--dry-run` shows the same note.
+
+### Changed
+- MySQL: when a migration with several statements fails, the error says that the statements before the error stayed applied and must be undone by hand.
+
 ## [0.10.0] - 2026-10-12
 
 ### Added

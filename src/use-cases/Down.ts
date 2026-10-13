@@ -2,16 +2,29 @@ import ConfigReader from "../ConfigReader";
 import MigrationExecutor from "../MigrationExecutor";
 import ConnectionFactory from "../ConnectionFactory";
 import Repository from "../Repository";
-import { withLockedTracker } from "../TrackerSession";
+import { withLockedTracker, withTracker } from "../TrackerSession";
+import { printDryRun } from "../DryRun";
 import { consoleLogger } from "../Logger";
 import Migration from "../Migration";
 import type { Config } from "../types";
 
+export type RevertOptions = {
+    /** Print the SQL that would run, without running it */
+    dryRun?: boolean,
+}
+
 /** Class for running the Down use case */
 export default class Down {
     /** Revert the last migration done */
-    public static async run() {
+    public static async run(options: RevertOptions = {}) {
         const config = new ConfigReader().getConfig();
+        if (options.dryRun) {
+            await withTracker(config, async tracker => {
+                const last = await tracker.getLastMigrationDone();
+                printDryRun(config.dialect, "down", last ? [last] : []);
+            });
+            return;
+        }
         await withLockedTracker(config, tracker => Down.revertLast(config, tracker));
     }
 
