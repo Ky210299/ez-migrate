@@ -72,21 +72,31 @@ program
   .option("--data-path <folder>", "Folder of the data file", "./ez-migrate-data")
   .option("-n, --name <name>", "Name of the generated files", "baseline")
   .action(traced("baseline", Baseline.run));
-program.command("down").description("Revert the last migration").action(traced("down", () => Down.run()));
+program
+  .command("down")
+  .description("Revert the last migration")
+  .option("--dry-run", "Print the SQL that would run, without running it")
+  .action(traced("down", Down.run));
 program
   .command("up")
   .description("Apply the next pending migration")
   .option("--allow-changed", "Run even if a migration file changed after it was applied")
+  .option("--dry-run", "Print the SQL that would run, without running it")
   .action(traced("up", Up.run));
 program .command("init [path]") .description("Initialize migration setup") .action(traced("init", Init.run));
 program
   .command("migrate")
   .description("Run all pending migrations")
   .option("--allow-changed", "Run even if a migration file changed after it was applied")
+  .option("--dry-run", "Print the SQL that would run, without running it")
   .action(traced("migrate", Migrate.run));
 program.command("reset").description("Reset all migrations").action(traced("reset", Reset.run));
 program.command("redo").description("Redo the last migration").action(traced("redo", Redo.run));
-program .command("rollback") .description("Rollback the last migration batch") .action(traced("rollback", Rollback.run));
+program
+  .command("rollback")
+  .description("Rollback the last migration batch")
+  .option("--dry-run", "Print the SQL that would run, without running it")
+  .action(traced("rollback", Rollback.run));
 program .command("status") .description("Show migration status") .action(traced("status", Status.run));
 program.command("list").description("Alias of status").action(traced("status", Status.run));
 program.command("version").description("Show CLI version").action(traced("version", Version.run));

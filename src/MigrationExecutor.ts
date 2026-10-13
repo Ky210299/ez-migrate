@@ -3,6 +3,20 @@ import Migration from "./Migration";
 import Repository from "./Repository";
 import { basename } from "node:path";
 import { tracer } from "./Tracer";
+import { consoleLogger } from "./Logger";
+import { countStatements } from "./sql";
+
+/**
+ * MySQL commits every DDL statement (CREATE, ALTER, DROP...) on its own, so a
+ * migration with several statements can't be rolled back as a whole.
+ * Returns the warning for that SQL, or null if it is atomic.
+ */
+export function nonAtomicWarning(dialect: string, sql: string): string | null {
+    if (dialect !== "mysql") return null;
+    const statements = countStatements(sql);
+    if (statements < 2) return null;
+    return `It has ${statements} statements and MySQL commits each one on its own: if one fails, the ones before it stay applied`;
+}
 
 /** Class that execute and track the migration(s) */
 class MigrationExecutor {
@@ -24,6 +38,8 @@ class MigrationExecutor {
         track: () => Promise<{ commit: () => Promise<void>, rollback: () => Promise<void> }>,
     ) {
         const file = basename(path);
+        const notAtomic = nonAtomicWarning(this.dbconnector.connection.DBMSName, sql);
+        if (notAtomic) consoleLogger.warn(`Migration ${file} (${direction}) is not atomic. ${notAtomic}`);
         await tracer.span(`migration.${direction}`, { file }, async () => {
             const { commit, rollback } = await track();
             try {
@@ -32,7 +48,10 @@ class MigrationExecutor {
                 await rollback();
                 // Say which file failed: the database error alone doesn't
                 const message = err instanceof Error ? err.message : String(err);
-                throw new Error(`Migration ${file} (${direction}) failed: ${message}`, { cause: err });
+                const fixByHand = notAtomic
+                    ? ". MySQL kept the statements that ran before the error: undo them by hand before running it again"
+                    : "";
+                throw new Error(`Migration ${file} (${direction}) failed: ${message}${fixByHand}`, { cause: err });
             }
             await commit();
         });

@@ -16,3 +16,17 @@ export async function withLockedTracker<T>(config: Config, fn: (tracker: Reposit
         await tracker.close().catch(() => {});
     }
 }
+
+/**
+ * Create the tracker, run fn and always close it. For commands that only read
+ * the history (status, --dry-run), so they never wait for the lock.
+ */
+export async function withTracker<T>(config: Config, fn: (tracker: Repository) => Promise<T>): Promise<T> {
+    const tracker = TrackerFactory.create(config);
+    try {
+        await tracker.init();
+        return await fn(tracker);
+    } finally {
+        await tracker.close().catch(() => {});
+    }
+}

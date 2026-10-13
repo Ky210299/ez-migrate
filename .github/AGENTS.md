@@ -128,7 +128,8 @@ export default class Make {
 ### Locks and trackers
 - Commands that change the database run inside `withLockedTracker(config, fn)` from `src/TrackerSession.ts`. It creates the tracker, takes the lock (`Repository.withLock`), and always closes it.
 - One command takes one lock. A use case that another one reuses has two methods: `run` (takes the lock) and a static method that receives an already locked tracker (`Migrate.apply`, `Down.revertLast`). Call that method from other use cases, never `run`, or the command waits for its own lock.
-- Read-only commands (`status`) and `seed --file` don't take the lock.
+- Read-only commands (`status`, `--dry-run`) use `withTracker` (no lock), and `seed --file` takes no lock.
+- `--dry-run` must use the same function as the real run to choose the migrations (`Migrate.pending`, `Up.next`), so both always agree. The SQL goes to stdout with `printDryRun`, never to the logger.
 - `MigrationExecutor.close()` only closes the target connection. Whoever creates the tracker closes it.
 - `migrate` and `up` call `SchemasHandler.checkAppliedUnchanged` before applying anything.
 - Tests for locks, SSL and changed migrations are in `tests/safety.test.ts`. The SSL users and test certificate are in `tests/fixtures/`.
