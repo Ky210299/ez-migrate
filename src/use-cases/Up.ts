@@ -1,12 +1,9 @@
 import ConfigReader from "../ConfigReader";
-import MigrationExecutor from "../MigrationExecutor";
 import Migration from "../Migration";
-import Repository from "../Repository";
 import SchemasHandler from "../SchemasHandler";
-import ConnectionFactory from "../ConnectionFactory";
-import { withLockedTracker, withTracker } from "../TrackerSession";
-import { printDryRun } from "../DryRun";
+import { runPlan, withExecutor } from "../RunPlan";
 import { consoleLogger } from "../Logger";
+import type Repository from "../Repository";
 import type { Config } from "../types";
 import type { MigrateOptions } from "./Migrate";
 
@@ -17,26 +14,21 @@ export default class Up {
     /** Execute the next pending migration */
     public static async run(options: MigrateOptions = {}) {
         const config = new ConfigReader().getConfig();
-        if (options.dryRun) {
-            await withTracker(config, async tracker => {
+        await runPlan(
+            config,
+            options,
+            async tracker => {
                 const next = await Up.next(config, tracker, options);
-                printDryRun(config.dialect, "up", next ? [next] : []);
-            });
-            return;
-        }
-        await withLockedTracker(config, async tracker => {
-            const nextMigration = await Up.next(config, tracker, options);
-            if (nextMigration == null) {
-                Up.consoleLogger.info("There is not a next migration available");
-                return
-            }
-            const migrationExecutor = new MigrationExecutor(ConnectionFactory.create(config), tracker);
-            try {
-                await migrationExecutor.executeSingleMigrationUp(nextMigration);
-            } finally {
-                await migrationExecutor.close()
-            }
-        });
+                return [{ direction: "up", migrations: next ? [next] : [] }];
+            },
+            async (tracker, [up]) => {
+                if (up.migrations.length === 0) {
+                    Up.consoleLogger.info("There is not a next migration available");
+                    return
+                }
+                await withExecutor(config, tracker, executor => executor.executeSingleMigrationUp(up.migrations[0]));
+            },
+        );
     }
 
     /** Next pending migration, or null. Fails if an applied file changed or the next file has DML */

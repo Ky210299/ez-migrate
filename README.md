@@ -132,6 +132,7 @@ Add `-e` to `make` to open the new file in `$EDITOR`.
 | `envKeys.url` | Optional. **Name** of an env var with a connection URL. See below | Not used |
 | `ssl` | Optional. SSL for MySQL and PostgreSQL. See below | No SSL |
 | `tracker` | Optional. Where to store the migrations history. See below | Same as the target |
+| `confirm` | Optional. `false` never asks before running migrations at the terminal. See [Confirmation](#confirmation) | `true` |
 
 The connection data is read from the env vars named in `envKeys`. A `.env` file in the current folder is loaded if it exists:
 
@@ -217,10 +218,10 @@ By default the history is stored in the table `ez_migration` of the target datab
 | --- | --- |
 | `init [folder]` | Creates `ez-migrate.json`. Does nothing if it exists. |
 | `make <name>` | Creates a migration file. `-s, --seed` creates a seed file. `-e, --edit` opens it in `$EDITOR`. |
-| `migrate` | Applies all pending migrations as one batch. Stops if an applied file changed (see [Edited migrations](#edited-migrations)); `--allow-changed` runs anyway. `--dry-run` prints the SQL without running it. |
-| `up` | Applies only the next pending migration (one batch). Same `--allow-changed` and `--dry-run` options as `migrate`. |
-| `down` | Reverts the last applied migration. `--dry-run` prints the SQL without running it. |
-| `rollback` | Reverts all migrations of the last batch, newest first. `--dry-run` prints the SQL without running it. |
+| `migrate` | Applies all pending migrations as one batch. Stops if an applied file changed (see [Edited migrations](#edited-migrations)); `--allow-changed` runs anyway. |
+| `up` | Applies only the next pending migration (one batch). Same `--allow-changed` option as `migrate`. |
+| `down` | Reverts the last applied migration. |
+| `rollback` | Reverts all migrations of the last batch, newest first. |
 | `redo` | Reverts the last migration and applies the same file again. |
 | `reset` | Reverts all applied migrations, newest first, then runs `migrate`. |
 | `status` | Lists the migration files (`✔` applied, `✘` pending, `⚠️` applied but the file changed after) and the seed files (`✔` run, `✘` pending). Also `list` or no command. |
@@ -228,11 +229,13 @@ By default the history is stored in the table `ez_migration` of the target datab
 | `baseline` | Writes the schema of an existing database as the first migration and marks it as applied. `-d, --data` also writes the current rows to a file ignored by git (`--data-path <folder>`, default `./ez-migrate-data`). `-n, --name <name>` sets the file name. See [Adopt ez-migrate](#adopt-ez-migrate-on-an-existing-database). |
 | `version` | Prints the version. Also `-v, --version`. |
 
+`migrate`, `up`, `down`, `rollback`, `redo` and `reset` also take `--dry-run` (print the SQL, run nothing) and `-y, --yes` (don't ask first, see [Confirmation](#confirmation)).
+
 The CLI exits with code `0` on success and `1` on any error, so it can stop a deploy script or CI job.
 
 ### Dry run
 
-`--dry-run` on `migrate`, `up`, `down` and `rollback` prints the SQL the command would run, in order, and runs nothing:
+`--dry-run` on `migrate`, `up`, `down`, `rollback`, `redo` and `reset` prints the SQL the command would run, in order, and runs nothing:
 
 ```text
 $ ez-migrate migrate --dry-run
@@ -246,9 +249,29 @@ CREATE TABLE posts (id INTEGER PRIMARY KEY);
 ```
 
 - It does the same checks as the real run, so it also fails on [edited migrations](#edited-migrations) and on DML in migrations.
-- `down` and `rollback` print the down SQL saved in the tracker, which is what they would run.
+- `down`, `rollback`, `redo` and `reset` print the down SQL saved in the tracker, which is what they would run. `redo` and `reset` print the down SQL first and then the up SQL.
 - It doesn't connect to the target database (only to the tracker) and doesn't take the lock.
 - The SQL is the output of the command, on stdout. It is never written to the logs.
+
+### Confirmation
+
+When you run `migrate`, `up`, `down`, `rollback`, `redo` or `reset` yourself at a terminal, ez-migrate first shows the SQL it will run (the same as `--dry-run`) and asks before running it:
+
+```text
+$ ez-migrate migrate
+-- 1 migration will be applied, in this order:
+
+-- 20260101000000000-users.sql (up)
+CREATE TABLE users (id INTEGER PRIMARY KEY);
+
+Run it? [y/N] y
+```
+
+- Any answer other than `y` / `yes` runs nothing.
+- **In CI, deploys and scripts it never asks** and runs as before: it only asks when the input and the output are a terminal and the `CI` env var is not set.
+- To skip the question: `-y, --yes`, the env var `EZ_MIGRATE_YES=1`, or `"confirm": false` in `ez-migrate.json`.
+- If there is nothing to run, it doesn't ask.
+- The plan is made again after the answer, under the lock. If it changed while you answered (another run applied migrations, or a new file appeared), nothing runs and it asks you to run the command again.
 
 ---
 
@@ -376,13 +399,13 @@ Notes:
 ## Advantages, disadvantages and use cases
 
 This section is updated with each version, based on what the tests and real use show.
-*Last review: 0.12.0.*
+*Last review: 0.13.0.*
 
 ### Advantages
 
 - **Plain SQL.** No ORM, no DSL, no JavaScript in migrations. You write exactly what the database runs.
 - **Small and fast.** One CLI, one JSON config, three runtime dependencies. A command starts in about 70 ms, and only the driver of the database in use is loaded.
-- **See before you run.** `--dry-run` prints the exact SQL that `migrate`, `up`, `down` or `rollback` would run.
+- **See before you run.** At the terminal, every command that changes the schema shows the exact SQL and asks before running it. `--dry-run` prints it without asking. In CI and deploys nothing changes: it never asks there.
 - **Easy to debug.** `--trace` shows the time of each step and `--verbose` logs every step, without printing your SQL or data.
 - **Up and down in one file.** Easy to review in a pull request.
 - **Safe on PostgreSQL and SQLite.** A failed migration leaves no partial changes.

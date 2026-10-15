@@ -43,6 +43,11 @@ export interface Project {
     run: (...args: Array<string>) => RunResult;
     /** Same as run, without blocking, to run several CLIs at the same time */
     runAsync: (...args: Array<string>) => Promise<RunResult>;
+    /**
+     * Run the CLI in a terminal (a pseudo terminal made with `script`), as a
+     * person would. When it asks "Run it?", `beforeAnswer` runs and then `answer` is typed.
+     */
+    runInTerminal: (args: Array<string>, options?: { answer?: string, env?: Record<string, string>, beforeAnswer?: () => void }) => Promise<RunResult & { asked: boolean }>;
     /** Env vars passed to the CLI. Tests can change them */
     env: Record<string, string>;
     /** Merge keys into ez-migrate.json */
@@ -216,6 +221,29 @@ export function createProject(dialect: Dialect, trackerDialect?: Dialect): Proje
         child.on("close", (code) => resolve({ code, output }));
     });
 
+    const runInTerminal: Project["runInTerminal"] = (args, options = {}) => new Promise((resolvePromise) => {
+        const command = [process.execPath, CLI, ...args].map(a => `'${a.replace(/'/g, "'\\''")}'`).join(" ");
+        // CI is removed: ez-migrate never asks when it is set
+        const childEnv: Record<string, string | undefined> = { ...process.env, ...env, NO_COLOR: "1", CI: "", ...options.env };
+        const child = spawn("script", ["-qec", command, "/dev/null"], { cwd: dir, env: childEnv });
+        let output = "";
+        let asked = false;
+        const timer = setTimeout(() => child.kill(), 30_000);
+        child.stdout.on("data", (chunk) => {
+            output += chunk;
+            if (!asked && output.includes("Run it? [y/N]")) {
+                asked = true;
+                options.beforeAnswer?.();
+                child.stdin.write(`${options.answer ?? "n"}\n`);
+            }
+        });
+        child.stderr.on("data", (chunk) => { output += chunk });
+        child.on("close", (code) => {
+            clearTimeout(timer);
+            resolvePromise({ code, output: output.replace(/\r/g, ""), asked });
+        });
+    });
+
     const addMigration = (name: string, up: string, down: string) => {
         mkdirSync(join(dir, "migrations"), { recursive: true });
         const file = join(dir, "migrations", `${prefix()}-${name}.sql`);
@@ -272,5 +300,5 @@ export function createProject(dialect: Dialect, trackerDialect?: Dialect): Proje
         if (trackerDialect) await dropDatabase(trackerDialect, trackerDatabase);
     };
 
-    return { dir, dialect, database, run, runAsync, env, updateConfig, addMigration, addSeed, tables, query, tracked, seeded, setup, cleanup };
+    return { dir, dialect, database, run, runAsync, runInTerminal, env, updateConfig, addMigration, addSeed, tables, query, tracked, seeded, setup, cleanup };
 }

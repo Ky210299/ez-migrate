@@ -30,6 +30,8 @@ export type Config = {
     sqlitePath: string,
     envKeys: EnvKeys,
     ssl?: SslConfig,
+    /** false: never ask before running migrations at the terminal. Default true */
+    confirm?: boolean,
     tracker: {
         dialect: (typeof TRACKER_DIALECTS)[keyof typeof TRACKER_DIALECTS],
         sqlitePath: string
