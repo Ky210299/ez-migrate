@@ -8,6 +8,14 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-10-15
+
+### Added
+- `ez-migrate check`: checks the migration and seed files without connecting to the database. Finds secrets (private keys, cloud and API keys, tokens, URLs with a password, database user passwords), DML in migrations, DDL in seeds, statements that delete data (`DROP TABLE`, `TRUNCATE`, `DROP COLUMN`...) and MySQL migrations that are not atomic. Exit code `1` on errors, `--strict` also fails on warnings. It never prints the value of a secret. A line with the comment `ez-migrate-allow-secret` is not checked for secrets.
+- `ez-migrate schema`: prints the current schema of the database as SQL (the same SQL as `baseline`), without rows. Read only.
+- `--json` on `status`, `check`, `schema` and `--dry-run` (`migrate`, `up`, `down`, `rollback`, `redo`, `reset`), for scripts and AI agents. `--json` without `--dry-run` fails before running anything.
+- README section "Use with AI agents", with instructions to copy into `AGENTS.md` / `CLAUDE.md`.
+
 ## [0.13.1] - 2026-10-15
 
 ### Changed

@@ -3,12 +3,14 @@ import Repository from "./Repository";
 import ConnectionFactory from "./ConnectionFactory";
 import MigrationExecutor from "./MigrationExecutor";
 import { withLockedTracker, withTracker } from "./TrackerSession";
-import { isEmptyPlan, Plan, printDryRun, printPlan } from "./DryRun";
+import { isEmptyPlan, Plan, printDryRun, printDryRunJson, printPlan } from "./DryRun";
 import type { Config } from "./types";
 
 export type RunOptions = {
     /** Print the SQL that would run, without running it */
     dryRun?: boolean,
+    /** With dryRun: print the plan as JSON */
+    json?: boolean,
     /** Run without asking first */
     yes?: boolean,
 }
@@ -54,8 +56,12 @@ export async function runPlan(
     makePlan: (tracker: Repository) => Promise<Plan>,
     execute: (tracker: Repository, plan: Plan) => Promise<void>,
 ) {
+    if (options.json && !options.dryRun) {
+        throw new Error("--json only works with --dry-run. Nothing was run");
+    }
     if (options.dryRun) {
-        await withTracker(config, async tracker => printDryRun(config.dialect, await makePlan(tracker)));
+        const print = options.json ? printDryRunJson : printDryRun;
+        await withTracker(config, async tracker => print(config.dialect, await makePlan(tracker)));
         return;
     }
     let approved: string | null = null;

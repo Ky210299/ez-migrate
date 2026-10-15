@@ -13,6 +13,8 @@ import Up from "./use-cases/Up";
 import MakeSeed from "./use-cases/MakeSeed";
 import Seed from "./use-cases/Seed";
 import Baseline from "./use-cases/Baseline";
+import Check from "./use-cases/Check";
+import Schema from "./use-cases/Schema";
 import { openEditor } from "./utils";
 import { consoleLogger, LOG_FORMATS, LOG_LEVELS } from "./Logger";
 import { tracer } from "./Tracer";
@@ -76,6 +78,7 @@ program
   .command("down")
   .description("Revert the last migration")
   .option("--dry-run", "Print the SQL that would run, without running it")
+  .option("--json", "With --dry-run: print the plan as JSON")
   .option("-y, --yes", "Run without showing the plan and asking first (env EZ_MIGRATE_YES=1)")
   .action(traced("down", Down.run));
 program
@@ -83,6 +86,7 @@ program
   .description("Apply the next pending migration")
   .option("--allow-changed", "Run even if a migration file changed after it was applied")
   .option("--dry-run", "Print the SQL that would run, without running it")
+  .option("--json", "With --dry-run: print the plan as JSON")
   .option("-y, --yes", "Run without showing the plan and asking first (env EZ_MIGRATE_YES=1)")
   .action(traced("up", Up.run));
 program .command("init [path]") .description("Initialize migration setup") .action(traced("init", Init.run));
@@ -91,28 +95,43 @@ program
   .description("Run all pending migrations")
   .option("--allow-changed", "Run even if a migration file changed after it was applied")
   .option("--dry-run", "Print the SQL that would run, without running it")
+  .option("--json", "With --dry-run: print the plan as JSON")
   .option("-y, --yes", "Run without showing the plan and asking first (env EZ_MIGRATE_YES=1)")
   .action(traced("migrate", Migrate.run));
 program
   .command("reset")
   .description("Reset all migrations")
   .option("--dry-run", "Print the SQL that would run, without running it")
+  .option("--json", "With --dry-run: print the plan as JSON")
   .option("-y, --yes", "Run without showing the plan and asking first (env EZ_MIGRATE_YES=1)")
   .action(traced("reset", Reset.run));
 program
   .command("redo")
   .description("Redo the last migration")
   .option("--dry-run", "Print the SQL that would run, without running it")
+  .option("--json", "With --dry-run: print the plan as JSON")
   .option("-y, --yes", "Run without showing the plan and asking first (env EZ_MIGRATE_YES=1)")
   .action(traced("redo", Redo.run));
 program
   .command("rollback")
   .description("Rollback the last migration batch")
   .option("--dry-run", "Print the SQL that would run, without running it")
+  .option("--json", "With --dry-run: print the plan as JSON")
   .option("-y, --yes", "Run without showing the plan and asking first (env EZ_MIGRATE_YES=1)")
   .action(traced("rollback", Rollback.run));
-program .command("status") .description("Show migration status") .action(traced("status", Status.run));
-program.command("list").description("Alias of status").action(traced("status", Status.run));
+program.command("status").description("Show migration status").option("--json", "Print the status as JSON").action(traced("status", Status.run));
+program.command("list").description("Alias of status").option("--json", "Print the status as JSON").action(traced("status", Status.run));
+program
+  .command("check")
+  .description("Check the migration and seed files without connecting: secrets, DML in migrations, DDL in seeds, statements that delete data")
+  .option("--json", "Print the result as JSON")
+  .option("--strict", "Also fail on warnings")
+  .action(traced("check", Check.run));
+program
+  .command("schema")
+  .description("Print the current schema of the database as SQL (no data)")
+  .option("--json", "Print the schema as JSON")
+  .action(traced("schema", Schema.run));
 program.command("version").description("Show CLI version").action(traced("version", Version.run));
 program.showHelpAfterError().showSuggestionAfterError();
 export default program;

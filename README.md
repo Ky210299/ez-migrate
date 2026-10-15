@@ -4,6 +4,7 @@
 [![Tests](https://github.com/Ky210299/ez-migrate/actions/workflows/test.yml/badge.svg)](https://github.com/Ky210299/ez-migrate/actions/workflows/test.yml)
 [![license](https://img.shields.io/npm/l/@ky210299/ez-migrate)](https://github.com/Ky210299/ez-migrate/blob/main/LICENSE)
 [![node](https://img.shields.io/node/v/@ky210299/ez-migrate)](https://nodejs.org)
+[![AI friendly](https://img.shields.io/badge/AI-friendly-8A2BE2)](https://github.com/Ky210299/ez-migrate#use-with-ai-agents)
 
 A small CLI to run database migrations and seeds written in plain `.sql` files.
 Supports **MySQL**, **PostgreSQL** and **SQLite**.
@@ -15,6 +16,7 @@ You write the SQL. ez-migrate runs it in order, records what was applied, and ca
 - Lock so several servers can run `migrate` at the same time.
 - Seeds that run once, and `baseline` to adopt an existing database.
 - Three runtime dependencies. SQLite uses the `node:sqlite` module of Node.js.
+- **AI friendly:** JSON output, `schema` to read the real schema and `check` to find secrets and risky SQL, so AI coding agents (Claude Code, Cursor, Copilot...) can work with your migrations. ez-migrate never calls an AI model and never sends your schema or data anywhere. See [Use with AI agents](#use-with-ai-agents).
 
 ---
 
@@ -25,15 +27,16 @@ You write the SQL. ez-migrate runs it in order, records what was applied, and ca
 3. [Migration and seed files](#migration-and-seed-files)
 4. [Configuration](#configuration)
 5. [Commands](#commands)
-6. [Running at the same time](#running-at-the-same-time)
-7. [Edited migrations](#edited-migrations)
-8. [Logs and traces](#logs-and-traces)
-9. [Adopt ez-migrate on an existing database](#adopt-ez-migrate-on-an-existing-database)
-10. [How tracking works](#how-tracking-works)
-11. [Advantages, disadvantages and use cases](#advantages-disadvantages-and-use-cases)
-12. [Development and tests](#development-and-tests)
-13. [Changelog](#changelog)
-14. [License](#license)
+6. [Use with AI agents](#use-with-ai-agents)
+7. [Running at the same time](#running-at-the-same-time)
+8. [Edited migrations](#edited-migrations)
+9. [Logs and traces](#logs-and-traces)
+10. [Adopt ez-migrate on an existing database](#adopt-ez-migrate-on-an-existing-database)
+11. [How tracking works](#how-tracking-works)
+12. [Advantages, disadvantages and use cases](#advantages-disadvantages-and-use-cases)
+13. [Development and tests](#development-and-tests)
+14. [Changelog](#changelog)
+15. [License](#license)
 
 ---
 
@@ -261,9 +264,13 @@ By default the history is stored in the table `ez_migration` of the target datab
 | `status` | Lists the migration files (`✔` applied, `✘` pending, `⚠️` applied but the file changed after) and the seed files (`✔` run, `✘` pending). Also `list` or no command. |
 | `seed` | Runs the seed files not run yet, in one transaction. `-a, --all` runs all again. `--fake` records them without running them. `-f, --file <path>` runs only that file and doesn't record it. |
 | `baseline` | Writes the schema of an existing database as the first migration and marks it as applied. `-d, --data` also writes the current rows to a file ignored by git (`--data-path <folder>`, default `./ez-migrate-data`). `-n, --name <name>` sets the file name. See [Adopt ez-migrate](#adopt-ez-migrate-on-an-existing-database). |
+| `check` | Checks the migration and seed files without connecting to the database: secrets, DML in migrations, DDL in seeds, statements that delete data. Exit code `1` on errors; `--strict` also fails on warnings. See [Check](#check). |
+| `schema` | Prints the current schema of the database as SQL, without data. Read only. |
 | `version` | Prints the version. Also `-v, --version`. |
 
 `migrate`, `up`, `down`, `rollback`, `redo` and `reset` also take `--dry-run` (print the SQL, run nothing) and `-y, --yes` (don't ask first, see [Confirmation](#confirmation)).
+
+`status`, `check`, `schema` and `--dry-run` take `--json` to print their output as JSON, for scripts and AI agents.
 
 The CLI exits with code `0` on success and `1` on any error, so it can stop a deploy script or CI job.
 
@@ -306,6 +313,65 @@ Run it? [y/N] y
 - To skip the question: `-y, --yes`, the env var `EZ_MIGRATE_YES=1`, or `"confirm": false` in `ez-migrate.json`.
 - If there is nothing to run, it doesn't ask.
 - The plan is made again after the answer, under the lock. If it changed while you answered (another run applied migrations, or a new file appeared), nothing runs and it asks you to run the command again.
+
+---
+
+## Use with AI agents
+
+ez-migrate has no AI inside. It gives AI coding agents (and scripts) what they need to work with your migrations without guessing:
+
+| Command | What the agent gets |
+| --- | --- |
+| `ez-migrate schema` | The real schema of the database as SQL (no rows). Add `--json` for `{ dialect, tables, sql, skipped }`. |
+| `ez-migrate status --json` | Every migration (`applied`, `pending`, `changed`) and seed (`run`, `pending`). |
+| `ez-migrate make <name>` | A new migration file with the right name and template, to fill in. |
+| `ez-migrate check --json` | Problems in the files, before anything runs. Exit code `1` on errors. |
+| `ez-migrate migrate --dry-run --json` | The exact SQL that would run, in order, with a note on MySQL migrations that are not atomic. |
+
+Why it is safe:
+
+- **Nothing leaves your machine.** ez-migrate doesn't call any model or service. What the agent sees is what you let it run.
+- **`schema` never reads rows.** Only the structure: tables, columns, indexes, triggers, functions.
+- **`check` never prints a secret.** It gives the file, line and kind of secret, not the value.
+- **Logs never contain SQL or data**, also with `--log-format json`.
+- **A person still approves.** At a terminal, `migrate` shows the SQL and asks before running it. In CI it runs as always.
+
+Copy this into the instructions file of your agent (`AGENTS.md`, `CLAUDE.md`, `.cursorrules`...):
+
+```markdown
+## Database migrations (ez-migrate)
+- Read the current schema with `npx ez-migrate schema` before writing a migration. Don't guess it.
+- Create migrations with `npx ez-migrate make <name>` and write both sections: `-- ez-migration-up` and `-- ez-migration-down`.
+- Migrations only have DDL (CREATE, ALTER, DROP). Data (INSERT, UPDATE, DELETE) goes in seeds: `npx ez-migrate make --seed <name>`.
+- Never write passwords, keys or real data in migration or seed files.
+- After writing files run `npx ez-migrate check` and fix every error.
+- Show the plan with `npx ez-migrate migrate --dry-run`. Don't run `migrate`, `down`, `rollback`, `redo` or `reset` unless I ask.
+```
+
+### Check
+
+`ez-migrate check` reads the migration and seed files. It doesn't connect to the database, so it runs in CI and in pre-commit hooks in a few milliseconds.
+
+| Rule | Level | What it finds |
+| --- | --- | --- |
+| `secret` | error | Private keys, AWS / GitHub / Slack / Stripe / Google keys, `sk-...` API keys, JWTs, URLs with a password, `IDENTIFIED BY '...'` and `PASSWORD '...'` of database users. Also in comments. |
+| `possible-secret` | warning | A name like `password`, `token` or `api_key` followed by a value. |
+| `format` | error | A migration without the up and down sections. |
+| `dml-in-migration` | error | `INSERT`, `UPDATE` or `DELETE` in the up section of a migration. |
+| `ddl-in-seed` | error | `CREATE`, `ALTER`, `DROP`, `TRUNCATE` or `RENAME` in a seed. |
+| `destructive` | warning | `DROP TABLE`, `DROP DATABASE`, `TRUNCATE` or `DROP COLUMN` in the up section. The data can't be recovered with the down section. |
+| `not-atomic` | warning | MySQL: a migration with several statements. If one fails, the ones before it stay applied. |
+
+```text
+$ ez-migrate check
+./migrations/20260102000000000-users.sql:3 error secret: Looks like a database user password. Don't commit secrets: ...
+./migrations/20260103000000000-drop_name.sql warning destructive: The up section has DROP COLUMN. ...
+1 error and 1 warning in 4 files
+```
+
+- If a line is not a secret (a test key, a public example), add the comment `ez-migrate-allow-secret` to that line.
+- `--json` prints `{ ok, files, errors, warnings, problems: [{ file, line, level, rule, message }] }`.
+- Edited migrations need the tracker, so `check` doesn't look for them. `status` and `migrate` do.
 
 ---
 
@@ -436,7 +502,7 @@ Notes:
 ## Advantages, disadvantages and use cases
 
 This section is updated with each version, based on what the tests and real use show.
-*Last review: 0.13.1.*
+*Last review: 0.14.0.*
 
 ### Advantages
 
@@ -454,10 +520,11 @@ This section is updated with each version, based on what the tests and real use 
 - **Seeds run once.** `seed` only runs new seed files, so it can run on every deploy.
 - **Easy to adopt.** `baseline` turns an existing database into a first migration in one command, on all three DBMS, including triggers, functions, procedures, sequences and partitions. The current data can be exported too, to a folder that git ignores, and loads with the same result as the original. Tested on the Sakila, Pagila, Chinook and Northwind sample databases.
 - **Works with branches.** Migrations merged later with an older name are still applied.
-- **Script friendly.** Exit code `1` on errors.
+- **Script and AI friendly.** Exit code `1` on errors, `--json` output, `schema` to read the real schema and `check` to find secrets and risky SQL before running. AI agents can write and review migrations without ez-migrate sending anything to a model.
 
 ### Disadvantages
 
+- **`check` uses patterns.** It finds common secrets and risky statements, not all of them. It is a safety net, not a full secret scanner or SQL linter.
 - **MySQL migrations are not atomic.** A migration with several DDL statements can be left half applied. ez-migrate warns before running it and says what to undo if it fails, but it can't undo it for you. See [How tracking works](#how-tracking-works).
 - **No data migrations.** You can't run an `UPDATE` to fill a new column inside a migration. You need a seed or a separate script.
 - **Edited seeds don't run again.** A seed is recorded by file name. If you change a seed that already ran, create a new seed file or use `seed --all`.
@@ -476,6 +543,7 @@ This section is updated with each version, based on what the tests and real use 
 - Existing databases without versioned migrations: `baseline` gives them a starting point.
 - Services deployed on several servers that run `migrate` on start: the lock makes them wait for each other.
 - Managed cloud databases that need SSL or a connection URL.
+- Projects where AI agents write migrations: `schema`, `check` and `--dry-run --json` let the agent work from the real schema and let a person see the SQL before it runs.
 - Prototypes with SQLite that may move to PostgreSQL later (with SQL rewritten where needed).
 
 ### Not recommended

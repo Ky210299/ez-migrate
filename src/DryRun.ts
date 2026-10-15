@@ -59,3 +59,19 @@ export function printDryRun(dialect: string, plan: Plan) {
 export function printPlan(dialect: string, plan: Plan) {
     console.log([`-- ${summary(plan, "will be")}, in this order:`, ...planSQL(dialect, plan)].join("\n"));
 }
+
+/**
+ * The same as printDryRun, as one JSON object for scripts and AI agents:
+ * `{ dryRun, steps: [{ direction, migrations: [{ file, sql, notAtomic }] }] }`
+ */
+export function printDryRunJson(dialect: string, plan: Plan) {
+    const steps = plan.map(({ direction, migrations }) => ({
+        direction,
+        migrations: migrations.map(migration => {
+            const details = migration.getDetails();
+            const sql = details[direction].trim();
+            return { file: basename(details.path), sql, notAtomic: nonAtomicWarning(dialect, sql) };
+        }),
+    }));
+    console.log(JSON.stringify({ dryRun: true, steps }, null, 2));
+}

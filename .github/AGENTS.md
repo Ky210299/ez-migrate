@@ -143,6 +143,12 @@ export default class Make {
 - `migrate` and `up` call `SchemasHandler.checkAppliedUnchanged` before applying anything.
 - Tests for locks, SSL and changed migrations are in `tests/safety.test.ts`. The SSL users and test certificate are in `tests/fixtures/`.
 
+### Output for scripts and AI agents
+- `--json` output (`status`, `check`, `schema`, `--dry-run`) is the command output: one JSON object on stdout with `console.log`. Logs stay on stdout/stderr through the logger as usual; tests parse from the first `{`.
+- `check` (`src/Checker.ts`) never connects to the database and never prints the value of a secret: only file, line and rule. Add new rules there with a test in `tests/agents.test.ts`.
+- `schema` reuses `SchemaDumper.dumpSchema` and never reads rows.
+- ez-migrate never calls an AI model or sends the schema anywhere. Keep it that way: AI support means output that agents can use, not network calls.
+
 ### CLI Patterns
 - All CLI commands are in `src/CLI.ts`
 - Commands use Commander.js for argument parsing
