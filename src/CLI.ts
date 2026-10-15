@@ -76,12 +76,14 @@ program
   .command("down")
   .description("Revert the last migration")
   .option("--dry-run", "Print the SQL that would run, without running it")
+  .option("-y, --yes", "Run without showing the plan and asking first (env EZ_MIGRATE_YES=1)")
   .action(traced("down", Down.run));
 program
   .command("up")
   .description("Apply the next pending migration")
   .option("--allow-changed", "Run even if a migration file changed after it was applied")
   .option("--dry-run", "Print the SQL that would run, without running it")
+  .option("-y, --yes", "Run without showing the plan and asking first (env EZ_MIGRATE_YES=1)")
   .action(traced("up", Up.run));
 program .command("init [path]") .description("Initialize migration setup") .action(traced("init", Init.run));
 program
@@ -89,13 +91,25 @@ program
   .description("Run all pending migrations")
   .option("--allow-changed", "Run even if a migration file changed after it was applied")
   .option("--dry-run", "Print the SQL that would run, without running it")
+  .option("-y, --yes", "Run without showing the plan and asking first (env EZ_MIGRATE_YES=1)")
   .action(traced("migrate", Migrate.run));
-program.command("reset").description("Reset all migrations").action(traced("reset", Reset.run));
-program.command("redo").description("Redo the last migration").action(traced("redo", Redo.run));
+program
+  .command("reset")
+  .description("Reset all migrations")
+  .option("--dry-run", "Print the SQL that would run, without running it")
+  .option("-y, --yes", "Run without showing the plan and asking first (env EZ_MIGRATE_YES=1)")
+  .action(traced("reset", Reset.run));
+program
+  .command("redo")
+  .description("Redo the last migration")
+  .option("--dry-run", "Print the SQL that would run, without running it")
+  .option("-y, --yes", "Run without showing the plan and asking first (env EZ_MIGRATE_YES=1)")
+  .action(traced("redo", Redo.run));
 program
   .command("rollback")
   .description("Rollback the last migration batch")
   .option("--dry-run", "Print the SQL that would run, without running it")
+  .option("-y, --yes", "Run without showing the plan and asking first (env EZ_MIGRATE_YES=1)")
   .action(traced("rollback", Rollback.run));
 program .command("status") .description("Show migration status") .action(traced("status", Status.run));
 program.command("list").description("Alias of status").action(traced("status", Status.run));

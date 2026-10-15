@@ -8,6 +8,17 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-10-15
+
+### Added
+- Confirmation at the terminal: `migrate`, `up`, `down`, `rollback`, `redo` and `reset` show the SQL they will run and ask `Run it? [y/N]` first. Only when the input and output are a terminal and `CI` is not set: CI, deploys and scripts run as before.
+- `-y, --yes`, env var `EZ_MIGRATE_YES=1` and config key `"confirm": false` to skip the question.
+- `--dry-run` on `redo` and `reset`. They print the down SQL and then the up SQL.
+
+### Changed
+- `redo` checks that the migration file exists before reverting. Before, it reverted the migration and then failed, leaving it reverted.
+- `reset` checks the migration files (DML) before reverting anything.
+
 ## [0.12.0] - 2026-10-15
 
 ### Added
