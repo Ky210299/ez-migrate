@@ -27,7 +27,7 @@ export function mustConfirm(config: Config, options: RunOptions): boolean {
     return Boolean(process.stdin.isTTY && process.stdout.isTTY);
 }
 
-async function ask(question: string): Promise<boolean> {
+export async function ask(question: string): Promise<boolean> {
     const rl = createInterface({ input: process.stdin, output: process.stdout });
     try {
         return /^(y|yes|s|si|sí)$/i.test((await rl.question(question)).trim());

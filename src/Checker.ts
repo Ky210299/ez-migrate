@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { splitStatements } from "./sql";
+import { splitStatements, stripComments } from "./sql";
 import { nonAtomicWarning } from "./MigrationExecutor";
 import SchemasHandler from "./SchemasHandler";
 import SeedHandler from "./SeedHandler";
@@ -52,6 +52,28 @@ const DESTRUCTIVE: Array<{ name: string, regexp: RegExp }> = [
     { name: "DROP COLUMN", regexp: /^ALTER\s+TABLE\b.*\bDROP\s+(?:COLUMN\b|(?!CONSTRAINT|INDEX|KEY|PRIMARY|FOREIGN|CHECK|DEFAULT|PARTITION|TRIGGER|IDENTITY|EXPRESSION|NOT\b|IF\s+EXISTS\s+(?:CONSTRAINT|INDEX))[A-Za-z_`"])/i },
 ];
 
+const TABLE_NAME = String.raw`("(?:[^"]|"")*"|\`(?:[^\`]|\`\`)*\`|\[[^\]]*\]|[\w$.]+)`;
+
+/** Table name without quotes and without the temp. / main. schema of SQLite */
+function tableKey(name: string): string {
+    return name.replace(/^["`[]|["`\]]$/g, "").replace(/^(?:temp|main)\./i, "").toLowerCase();
+}
+
+/**
+ * True if the SQL drops a table that existed before it. Dropping a table the
+ * same SQL created (a temporary table), or one that a renamed table replaces
+ * (rebuilding a table, as ez-migrate alter does on SQLite), doesn't delete data.
+ */
+function dropsExistingTable(sql: string): boolean {
+    const text = stripComments(sql);
+    const names = (regexp: string) => [...text.matchAll(new RegExp(regexp, "gi"))].map(m => tableKey(m[1]));
+    const replaced = new Set([
+        ...names(String.raw`CREATE\s+(?:TEMP\s+|TEMPORARY\s+)?TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?${TABLE_NAME}`),
+        ...names(String.raw`ALTER\s+TABLE\s+${TABLE_NAME}\s+RENAME\s+TO\s+${TABLE_NAME}`.replace(TABLE_NAME, TABLE_NAME.replace("(", "(?:"))),
+    ]);
+    return names(String.raw`(?:^|;)\s*DROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?${TABLE_NAME}`).some(name => !replaced.has(name));
+}
+
 /** Secrets in the file: one problem per line, with the line number and never the value */
 function findSecrets(file: string, text: string): Array<Problem> {
     const problems: Array<Problem> = [];
@@ -96,7 +118,7 @@ export function checkFiles(config: Config): { files: number, problems: Array<Pro
         if (schemaHandler.hasDML(up)) {
             problems.push({ file: path, level: "error", rule: "dml-in-migration", message: "The up section has DML (INSERT, UPDATE, DELETE). Migrations can't have DML: use a seed" });
         }
-        for (const { name } of DESTRUCTIVE.filter(d => statements.some(s => d.regexp.test(s)))) {
+        for (const { name } of DESTRUCTIVE.filter(d => d.name === "DROP TABLE" ? dropsExistingTable(up) : statements.some(s => d.regexp.test(s)))) {
             problems.push({ file: path, level: "warning", rule: "destructive", message: `The up section has ${name}. The data it deletes can't be recovered with the down section` });
         }
         const notAtomic = nonAtomicWarning(config.dialect, up);

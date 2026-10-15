@@ -4,7 +4,7 @@ import Repository from "./Repository";
 import { basename } from "node:path";
 import { tracer } from "./Tracer";
 import { consoleLogger } from "./Logger";
-import { countStatements } from "./sql";
+import { splitStatements } from "./sql";
 
 /**
  * MySQL commits every DDL statement (CREATE, ALTER, DROP...) on its own, so a
@@ -13,10 +13,15 @@ import { countStatements } from "./sql";
  */
 export function nonAtomicWarning(dialect: string, sql: string): string | null {
     if (dialect !== "mysql") return null;
-    const statements = countStatements(sql);
+    // SET, SELECT and temporary tables don't commit: only DDL on real tables does
+    const statements = splitStatements(sql).filter(s => IMPLICIT_COMMIT.test(s) && !TEMPORARY_TABLE.test(s)).length;
     if (statements < 2) return null;
     return `It has ${statements} statements and MySQL commits each one on its own: if one fails, the ones before it stay applied`;
 }
+
+/** Statements that MySQL commits on their own */
+const IMPLICIT_COMMIT = /^(?:CREATE|ALTER|DROP|RENAME|TRUNCATE)\b/i;
+const TEMPORARY_TABLE = /^(?:CREATE|DROP)\s+TEMPORARY\s+TABLE\b/i;
 
 /** Class that execute and track the migration(s) */
 class MigrationExecutor {

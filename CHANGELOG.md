@@ -8,6 +8,18 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-10-15
+
+### Added
+- `ez-migrate alter <table> <column> <type>`: writes a migration that changes the type of a column without losing data. It converts every value to the new type and back to see which ones change, tests the migration (up and down) on a copy of the table, and writes it only if it is safe. The migration checks the values again before changing anything, so another database with other values (production) is not changed. Options: `--dry-run`, `--allow-changes`, `--skip-test`, `-y`, `-n`, `--json`.
+- `enum('a','b')` as a type for `alter` on the three DBMS: native `ENUM` on MySQL, an enum type on PostgreSQL (new values at the end with `ADD VALUE`), `TEXT` with a `CHECK` on SQLite.
+- SQLite: a migration section that starts with `PRAGMA foreign_keys = OFF;` runs with foreign keys off, and they are checked before commit. Needed to rebuild a table.
+
+### Changed
+- Migrations accept `INSERT INTO a (...) SELECT ... FROM b` without values: it copies rows that already exist (SQLite needs it to rebuild a table). Any other DML is still rejected.
+- `not-atomic` (MySQL) only counts statements that MySQL commits on their own: `SET`, `SELECT` and temporary tables don't make a migration non atomic.
+- `check`: dropping a table that the same section created or replaces with a renamed table is not `destructive`.
+
 ## [0.14.0] - 2026-10-15
 
 ### Added

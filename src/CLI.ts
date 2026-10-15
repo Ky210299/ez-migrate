@@ -132,6 +132,18 @@ program
   .description("Print the current schema of the database as SQL (no data)")
   .option("--json", "Print the schema as JSON")
   .action(traced("schema", Schema.run));
+program
+  .command("alter <table> <column> <type>")
+  .description("Write a migration that changes the type of a column, after checking every value and testing it on a copy of the table. <type> is a type of your database (char(2), bigint) or enum('a','b')")
+  .option("--dry-run", "Check the values and test on a copy, without writing the migration")
+  .option("--allow-changes", "Write it even if some values change (rounded, cut, other format)")
+  .option("--skip-test", "Don't test it on a copy of the table (very big tables)")
+  .option("-y, --yes", "Copy big tables for the test without asking")
+  .option("-n, --name <name>", "Name of the migration file")
+  .option("--json", "Print the result as JSON")
+  // Loaded only when used: its code is big and other commands don't need it
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  .action(traced("alter", (...args: Parameters<typeof import("./use-cases/Alter").default.run>) => require("./use-cases/Alter").default.run(...args)));
 program.command("version").description("Show CLI version").action(traced("version", Version.run));
 program.showHelpAfterError().showSuggestionAfterError();
 export default program;

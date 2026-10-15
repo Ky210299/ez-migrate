@@ -8,6 +8,14 @@ import { isEmptySQL, normalizeSQL, splitStatements } from "./sql";
 import { fileTimestamp } from "./utils";
 import { consoleLogger } from "./Logger";
 
+/**
+ * INSERT INTO a (...) SELECT ... FROM b, without values (strings or numbers),
+ * copies rows that already exist from one table to another. It is part of a
+ * schema change (SQLite has to rebuild a table to change a column), not data,
+ * so migrations can have it.
+ */
+const COPY_ROWS = /^INSERT\s+INTO\s+[\w$."`[\]]+\s*(?:\([^()]*\)\s*)?SELECT\b(?![\s\S]*(?:\bVALUES\b|'|\b\d))[\s\S]*\bFROM\b/i;
+
 type SchemaHandlerArguments = { migrationsPath: string };
 
 /** Class for handle the migrations file schemas */
@@ -32,7 +40,7 @@ export default class SchemasHandler {
     }
     /** True if a statement is DML. The body of a trigger or procedure is part of its CREATE statement */
     hasDML(sql: string){
-        return splitStatements(sql).some(statement => this.DMLRegExp.test(statement));
+        return splitStatements(sql).some(statement => this.DMLRegExp.test(statement) && !COPY_ROWS.test(statement));
     }
 
     private ensureMigrationPathExists() {

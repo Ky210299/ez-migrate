@@ -15,6 +15,7 @@ You write the SQL. ez-migrate runs it in order, records what was applied, and ca
 - Shows the SQL and asks before running it at the terminal; runs without asking in CI.
 - Lock so several servers can run `migrate` at the same time.
 - Seeds that run once, and `baseline` to adopt an existing database.
+- `alter` changes the type of a column (for example to an enum) without losing data: it checks every value and tests the change on a copy of the table before writing the migration.
 - Three runtime dependencies. SQLite uses the `node:sqlite` module of Node.js.
 - **AI friendly:** JSON output, `schema` to read the real schema and `check` to find secrets and risky SQL, so AI coding agents (Claude Code, Cursor, Copilot...) can work with your migrations. ez-migrate never calls an AI model and never sends your schema or data anywhere. See [Use with AI agents](#use-with-ai-agents).
 
@@ -32,11 +33,12 @@ You write the SQL. ez-migrate runs it in order, records what was applied, and ca
 8. [Edited migrations](#edited-migrations)
 9. [Logs and traces](#logs-and-traces)
 10. [Adopt ez-migrate on an existing database](#adopt-ez-migrate-on-an-existing-database)
-11. [How tracking works](#how-tracking-works)
-12. [Advantages, disadvantages and use cases](#advantages-disadvantages-and-use-cases)
-13. [Development and tests](#development-and-tests)
-14. [Changelog](#changelog)
-15. [License](#license)
+11. [Change a column type (alter)](#change-a-column-type-alter)
+12. [How tracking works](#how-tracking-works)
+13. [Advantages, disadvantages and use cases](#advantages-disadvantages-and-use-cases)
+14. [Development and tests](#development-and-tests)
+15. [Changelog](#changelog)
+16. [License](#license)
 
 ---
 
@@ -113,7 +115,8 @@ DROP TABLE users;
 - Both sections are required and can have several statements. The new file has only comments, so `migrate` fails with `The UP migration section is empty` until you write the SQL.
 - Text outside the two sections is ignored.
 - Files run in file name order. The timestamp prefix (`YYYYMMDDHHmmssSSS`, UTC) keeps the creation order.
-- The up section can't have DML (statements that start with `INSERT INTO`, `UPDATE` or `DELETE FROM`). Use seeds for data. `migrate` and `up` fail before running anything if a pending file has it.
+- The up section can't have DML (statements that start with `INSERT INTO`, `UPDATE` or `DELETE FROM`). Use seeds for data. `migrate` and `up` fail before running anything if a pending file has it. One exception: `INSERT INTO a (...) SELECT ... FROM b` without values (no strings or numbers) copies rows that already exist from one table to another, which SQLite needs to rebuild a table, so it is allowed.
+- SQLite: if the first statement of a section is `PRAGMA foreign_keys = OFF;`, ez-migrate turns foreign keys off before the transaction (SQLite ignores it inside one), checks them all before commit and turns them on again. This is what SQLite needs to [rebuild a table](https://www.sqlite.org/lang_altertable.html#otheralter).
 - The SQL is sent to the database as written, so it must be valid for your DBMS.
 
 ### Seed
@@ -266,11 +269,12 @@ By default the history is stored in the table `ez_migration` of the target datab
 | `baseline` | Writes the schema of an existing database as the first migration and marks it as applied. `-d, --data` also writes the current rows to a file ignored by git (`--data-path <folder>`, default `./ez-migrate-data`). `-n, --name <name>` sets the file name. See [Adopt ez-migrate](#adopt-ez-migrate-on-an-existing-database). |
 | `check` | Checks the migration and seed files without connecting to the database: secrets, DML in migrations, DDL in seeds, statements that delete data. Exit code `1` on errors; `--strict` also fails on warnings. See [Check](#check). |
 | `schema` | Prints the current schema of the database as SQL, without data. Read only. |
+| `alter <table> <column> <type>` | Writes a migration that changes the type of a column, after checking every value and testing it on a copy of the table. `--dry-run` writes nothing. See [Change a column type](#change-a-column-type-alter). |
 | `version` | Prints the version. Also `-v, --version`. |
 
 `migrate`, `up`, `down`, `rollback`, `redo` and `reset` also take `--dry-run` (print the SQL, run nothing) and `-y, --yes` (don't ask first, see [Confirmation](#confirmation)).
 
-`status`, `check`, `schema` and `--dry-run` take `--json` to print their output as JSON, for scripts and AI agents.
+`status`, `check`, `schema`, `alter` and `--dry-run` take `--json` to print their output as JSON, for scripts and AI agents.
 
 The CLI exits with code `0` on success and `1` on any error, so it can stop a deploy script or CI job.
 
@@ -359,8 +363,8 @@ Copy this into the instructions file of your agent (`AGENTS.md`, `CLAUDE.md`, `.
 | `format` | error | A migration without the up and down sections. |
 | `dml-in-migration` | error | `INSERT`, `UPDATE` or `DELETE` in the up section of a migration. |
 | `ddl-in-seed` | error | `CREATE`, `ALTER`, `DROP`, `TRUNCATE` or `RENAME` in a seed. |
-| `destructive` | warning | `DROP TABLE`, `DROP DATABASE`, `TRUNCATE` or `DROP COLUMN` in the up section. The data can't be recovered with the down section. |
-| `not-atomic` | warning | MySQL: a migration with several statements. If one fails, the ones before it stay applied. |
+| `destructive` | warning | `DROP TABLE`, `DROP DATABASE`, `TRUNCATE` or `DROP COLUMN` in the up section. The data can't be recovered with the down section. Dropping a table that the same section created (a temporary table) or replaces with a renamed one (a rebuild) is not a warning. |
+| `not-atomic` | warning | MySQL: a migration with several statements that MySQL commits on their own (`CREATE`, `ALTER`, `DROP`, `RENAME`, `TRUNCATE`). If one fails, the ones before it stay applied. `SET`, `SELECT` and temporary tables don't count. |
 
 ```text
 $ ez-migrate check
@@ -485,6 +489,57 @@ Notes:
 
 ---
 
+## Change a column type (alter)
+
+Changing the type of a column with data is risky: a value can be cut (`'ARG'` in `CHAR(2)`), rounded (`1.50` in `INTEGER`) or not fit (`'banned'` in an enum without it), and MySQL without strict mode does it without an error. `ez-migrate alter` checks this for you and writes the migration only when it is safe:
+
+```text
+$ ez-migrate alter users status "enum('active','blocked')"
+Table users, column status
+  Type: varchar(20) -> enum('active','blocked')
+  Rows: 12430, 1.2 MB
+  Values: 12427 stay the same, 0 change, 3 can't be converted
+  Values that can't be converted:
+    'banned' (3 rows)
+  Test on a copy of the table: not run. Fix the values first
+  Result: NOT safe
+    - Values in 3 rows can't be converted to enum('active','blocked'). Change those values first (with a seed) or choose another type
+
+No migration was written
+```
+
+What it does, in order:
+
+1. Reads the column from the database. Pending migrations must be applied first, because they could change it.
+2. Converts every value to the new type and back, and compares it with the original. A value stays the same if the round trip gives the same value: `2.00 -> 2 -> 2.00` stays, `1.50 -> 2` changes, `'Active' -> 'active'` changes. It shows how many values change and which ones.
+3. Copies the table (`<table>__ezm_test`, in the same database), runs the up SQL on the copy and compares every row, runs the down SQL and checks that every value is back as it was. The copy is always dropped, also on errors and Ctrl+C. This finds what the values alone don't: a default not in the new enum, a unique index that two cut values break.
+4. Writes `migrations/<timestamp>-alter-<table>-<column>.sql`. Apply it with `ez-migrate migrate` as any migration.
+
+The migration also checks the values again before changing anything, and stops without changes if one would change. So a database with other values than yours (production) is not changed by mistake.
+
+| Option | What it does |
+| --- | --- |
+| `--dry-run` | Checks the values and tests on the copy, without writing the migration. |
+| `--allow-changes` | Writes it even if some values change (rounded, other format). Values that can't be converted still stop it, and MySQL still never cuts text. |
+| `--skip-test` | Doesn't test on a copy. For very big tables. |
+| `-y, --yes` | Copies big tables (more than 1,000,000 rows or 1 GB) without asking. Without a terminal, big tables need `--yes` or `--skip-test`. |
+| `-n, --name <name>` | Name of the migration file. |
+| `--json` | Prints the result as JSON. |
+
+`<type>` is a type of your database (`char(2)`, `bigint`, `numeric(10,2)`), or `enum('a','b')`, which works on the three DBMS:
+
+- **MySQL:** a native `ENUM`. The column keeps its `NOT NULL`, default, comment and charset. The migration runs in strict mode, so MySQL fails instead of cutting a value.
+- **PostgreSQL:** an enum type named `<table>_<column>`. Adding values at the end uses `ALTER TYPE ... ADD VALUE`, which doesn't touch the rows. Removing or reordering values creates a new type, converts the column and takes the old name. Everything runs in one transaction.
+- **SQLite:** `TEXT` with a `CHECK (column IN (...))` named `ezm_enum_<column>`. SQLite can't change a column, so the table is rebuilt as the [SQLite docs](https://www.sqlite.org/lang_altertable.html#otheralter) say, in one transaction: new table, copy of the rows, rename, and the same indexes and triggers. Views and the rows of other tables are kept, and foreign keys are checked before commit.
+
+Limits:
+
+- MySQL and PostgreSQL can't change a column that is part of a foreign key, and PostgreSQL can't change a column used by a view. `alter` says so and writes nothing: drop the foreign key or view in a migration first and create it again after.
+- The test copies the whole table into the same database. On a big production table that takes time and disk: run it on a copy of the data, or use `--skip-test`.
+- The values shown in the result are your data. They are printed to the terminal (stdout), never to the logs.
+
+---
+
 ## How tracking works
 
 - Each applied migration is a row in the table `ez_migration`: batch id, time, the up and down SQL, and the file path.
@@ -502,7 +557,7 @@ Notes:
 ## Advantages, disadvantages and use cases
 
 This section is updated with each version, based on what the tests and real use show.
-*Last review: 0.14.0.*
+*Last review: 0.15.0.*
 
 ### Advantages
 
@@ -520,6 +575,7 @@ This section is updated with each version, based on what the tests and real use 
 - **Seeds run once.** `seed` only runs new seed files, so it can run on every deploy.
 - **Easy to adopt.** `baseline` turns an existing database into a first migration in one command, on all three DBMS, including triggers, functions, procedures, sequences and partitions. The current data can be exported too, to a folder that git ignores, and loads with the same result as the original. Tested on the Sakila, Pagila, Chinook and Northwind sample databases.
 - **Works with branches.** Migrations merged later with an older name are still applied.
+- **Safe column type changes.** `alter` checks every value, tests the migration (up and down) on a copy of the table and writes it only if no value is lost. The migration checks the values again on each database, so production is not changed if it has other values. Enums work the same on the three DBMS.
 - **Script and AI friendly.** Exit code `1` on errors, `--json` output, `schema` to read the real schema and `check` to find secrets and risky SQL before running. AI agents can write and review migrations without ez-migrate sending anything to a model.
 
 ### Disadvantages
@@ -527,6 +583,7 @@ This section is updated with each version, based on what the tests and real use 
 - **`check` uses patterns.** It finds common secrets and risky statements, not all of them. It is a safety net, not a full secret scanner or SQL linter.
 - **MySQL migrations are not atomic.** A migration with several DDL statements can be left half applied. ez-migrate warns before running it and says what to undo if it fails, but it can't undo it for you. See [How tracking works](#how-tracking-works).
 - **No data migrations.** You can't run an `UPDATE` to fill a new column inside a migration. You need a seed or a separate script.
+- **`alter` changes one column type at a time.** It doesn't rename columns, change foreign keys or columns used by views, and its test copies the whole table, which is slow on very big tables. It doesn't change a big MySQL table without locking it: for that use gh-ost or pt-online-schema-change.
 - **Edited seeds don't run again.** A seed is recorded by file name. If you change a seed that already ran, create a new seed file or use `seed --all`.
 - **`baseline` has limits.** It doesn't export permissions, row level security policies or other PostgreSQL schemas, and `--data` loads all rows in memory, so it is not for big databases.
 - **SQL is not portable.** A migration written for PostgreSQL may not run on MySQL.
@@ -545,6 +602,7 @@ This section is updated with each version, based on what the tests and real use 
 - Managed cloud databases that need SSL or a connection URL.
 - Projects where AI agents write migrations: `schema`, `check` and `--dry-run --json` let the agent work from the real schema and let a person see the SQL before it runs.
 - Prototypes with SQLite that may move to PostgreSQL later (with SQL rewritten where needed).
+- Starting with simple types (`VARCHAR`) and moving to better ones later (enums, smaller types), with `alter` checking that no value is lost.
 
 ### Not recommended
 
@@ -553,6 +611,7 @@ This section is updated with each version, based on what the tests and real use 
 - Projects that must run the same migrations on several DBMS.
 - Running migrations from application code.
 - Copying big production databases with `baseline --data`. Use the DBMS backup tools for the data.
+- Changing the type of columns of very big, busy MySQL tables: the `ALTER` locks the table while it copies it.
 - PostgreSQL databases split in several schemas, or that depend on permissions and row level security in the migrations.
 
 ---
