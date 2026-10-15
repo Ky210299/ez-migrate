@@ -1,6 +1,6 @@
 {
     "name": "@ky210299/ez-migrate",
-    "version": "0.13.0",
+    "version": "0.13.1",
     "description": "Lightweight CLI for SQL migrations and seeds written in plain .sql files (MySQL, PostgreSQL, SQLite)",
     "main": "dist/ez-migrate.js",
     "bin": {
@@ -19,11 +19,19 @@
     },
     "keywords": [
         "migrations",
-        "SQL",
-        "databases"
+        "migration",
+        "sql",
+        "database",
+        "schema",
+        "seed",
+        "mysql",
+        "postgres",
+        "postgresql",
+        "sqlite",
+        "cli"
     ],
     "author": "Leonardo Bazán Márquez",
-    "license": "ISC",
+    "license": "MIT",
     "packageManager": "pnpm@10.7.1",
     "dependencies": {
         "commander": "13.1.0",
@@ -46,5 +54,9 @@
     "repository": {
         "type": "git",
         "url": "git+https://github.com/Ky210299/ez-migrate.git"
+    },
+    "homepage": "https://github.com/Ky210299/ez-migrate#readme",
+    "bugs": {
+        "url": "https://github.com/Ky210299/ez-migrate/issues"
     }
 }

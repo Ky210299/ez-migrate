@@ -8,6 +8,20 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+## [0.13.1] - 2026-10-15
+
+### Changed
+- README checked against the code and made fit for the npm page:
+  - Badges, a short feature list, `npx @ky210299/ez-migrate` without installing, and a quick start with a real `.env` example.
+  - Fixed: with SQLite the history is in the separate file `<sqlitePath>/tracker.db`, not in the target database. With the default `sqlitePath` both `.db` files go in `./migrations`; the README now says to change it or ignore them in git.
+  - Fixed: only the up section of a migration is checked for DML, and the check looks at the start of each statement.
+  - Added what was missing: defaults of the `tracker` key (`mysql`, `TRACKER_*` env vars), the main `ssl` is not used for a separate tracker, `.env` doesn't replace env vars already set, missing `ez-migrate.json` uses the defaults, `$VISUAL`, confirmation also accepts `s` / `si`, `--trace` writes to stderr, `NO_COLOR`, and empty seed files are skipped.
+  - Links to CHANGELOG, LICENSE and AGENTS.md are full GitHub URLs, so they work on npmjs.com.
+- `package.json`: license is `MIT`, as in the LICENSE file (it said `ISC`). Added `homepage`, `bugs` and more keywords for npm search.
+
+### Removed
+- `migrations.config.json`: an old file not used by the code. It was published in the npm package.
+
 ## [0.13.0] - 2026-10-15
 
 ### Added
