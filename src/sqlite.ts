@@ -5,6 +5,10 @@ import type { DatabaseSync } from "node:sqlite";
 import { Row, SqliteConnection as SqliteConnectionInterface } from "./DatabaseConnector";
 import { consoleLogger } from "./Logger";
 import { describeTarget } from "./utils";
+import { stripComments } from "./sql";
+
+/** The SQL starts with PRAGMA foreign_keys = OFF */
+const FOREIGN_KEYS_OFF = /^\s*PRAGMA\s+foreign_keys\s*=\s*(?:OFF|0|FALSE|NO)\s*(?:;|$)/i;
 
 export default class SqliteConnection implements SqliteConnectionInterface {
     private db: DatabaseSync | null = null;
@@ -37,17 +41,37 @@ export default class SqliteConnection implements SqliteConnectionInterface {
         }
     }
 
-    /** Run all the statements in a transaction. SQLite DDL is transactional */
+    /**
+     * Run all the statements in a transaction. SQLite DDL is transactional.
+     * If the first statement is `PRAGMA foreign_keys = OFF`, foreign keys are
+     * turned off before the transaction (SQLite ignores it inside one), checked
+     * all at once before commit, and turned on again. Rebuilding a table needs
+     * it: https://www.sqlite.org/lang_altertable.html#otheralter
+     */
     async runSQL(sql: string): Promise<void> {
         const db = this.open();
-        db.exec("BEGIN");
+        const foreignKeysOff = FOREIGN_KEYS_OFF.test(stripComments(sql))
+            && (db.prepare("PRAGMA foreign_keys").get() as { foreign_keys: number }).foreign_keys === 1;
+        if (foreignKeysOff) db.exec("PRAGMA foreign_keys = OFF");
         try {
-            db.exec(sql);
-            db.exec("COMMIT");
-        } catch (err) {
-            consoleLogger.debug(`SQLite error, transaction rolled back: ${err}`);
-            db.exec("ROLLBACK");
-            throw err;
+            db.exec("BEGIN");
+            try {
+                db.exec(sql);
+                if (foreignKeysOff) {
+                    const broken = db.prepare("PRAGMA foreign_key_check").all() as Array<{ table: string }>;
+                    if (broken.length > 0) {
+                        const tables = [...new Set(broken.map(row => row.table))].join(", ");
+                        throw new Error(`${broken.length} rows reference rows that don't exist (tables: ${tables}). Nothing was changed`);
+                    }
+                }
+                db.exec("COMMIT");
+            } catch (err) {
+                consoleLogger.debug(`SQLite error, transaction rolled back: ${err}`);
+                db.exec("ROLLBACK");
+                throw err;
+            }
+        } finally {
+            if (foreignKeysOff) db.exec("PRAGMA foreign_keys = ON");
         }
     }
     

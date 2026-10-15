@@ -165,3 +165,82 @@ export function splitStatements(sql: string): Array<string> {
 export function countStatements(sql: string): number {
     return splitStatements(sql).length;
 }
+
+/** Index of the `)` that closes the `(` at `open`, skipping quoted text. -1 if it is not closed */
+export function closingParen(sql: string, open: number): number {
+    let depth = 0;
+    let i = open;
+    while (i < sql.length) {
+        const quotedTo = quotedEnd(sql, i);
+        if (quotedTo != null) {
+            i = quotedTo;
+            continue;
+        }
+        if (sql[i] === "(") depth++;
+        else if (sql[i] === ")" && --depth === 0) return i;
+        i++;
+    }
+    return -1;
+}
+
+/** Split the text on `separator`, only outside quotes and parentheses. Parts are not trimmed */
+export function splitTopLevel(sql: string, separator: string): Array<string> {
+    const parts: Array<string> = [];
+    let depth = 0;
+    let start = 0;
+    let i = 0;
+    while (i < sql.length) {
+        const quotedTo = quotedEnd(sql, i);
+        if (quotedTo != null) {
+            i = quotedTo;
+            continue;
+        }
+        const ch = sql[i];
+        if (ch === "(") depth++;
+        else if (ch === ")") depth--;
+        else if (ch === separator && depth === 0) {
+            parts.push(sql.slice(start, i));
+            start = i + 1;
+        }
+        i++;
+    }
+    parts.push(sql.slice(start));
+    return parts;
+}
+
+/**
+ * Index of the first of `words` (upper case) that is outside quotes and
+ * parentheses, as a whole word. -1 if there is none.
+ */
+export function findTopLevelWord(sql: string, words: Array<string>): number {
+    let depth = 0;
+    let i = 0;
+    while (i < sql.length) {
+        const quotedTo = quotedEnd(sql, i);
+        if (quotedTo != null) {
+            i = quotedTo;
+            continue;
+        }
+        const ch = sql[i];
+        if (ch === "(") depth++;
+        else if (ch === ")") depth--;
+        else if (depth === 0 && /[A-Za-z]/.test(ch) && !/[A-Za-z0-9_$]/.test(sql[i - 1] ?? "")) {
+            const word = /^[A-Za-z_][A-Za-z0-9_$]*/.exec(sql.slice(i, i + 64))![0];
+            if (words.includes(word.toUpperCase())) return i;
+            i += word.length;
+            continue;
+        }
+        i++;
+    }
+    return -1;
+}
+
+/** Values of the quoted strings in the text, in order: `'a', 'it''s'` -> ["a", "it's"] */
+export function quotedValues(sql: string): Array<string> {
+    const values: Array<string> = [];
+    transform(sql, text => {
+        if (text[0] === "'") values.push(text.slice(1, -1).replace(/''/g, "'"));
+        return text;
+    }, text => text);
+    return values;
+}

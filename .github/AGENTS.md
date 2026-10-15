@@ -116,6 +116,14 @@ export default class Make {
 - `seed --file` runs through `DatabaseConnector.loadData`. A connector can define `loadData` when its DBMS loads data faster another way (SQLite: foreign keys off, then `PRAGMA foreign_key_check` before commit).
 - Before a release that changes the dumper, also try real sample databases (Sakila, Pagila, Chinook, Northwind): load one into database A, run `baseline --data`, migrate and `seed --file` into B, and compare `pg_dump`/`mysqldump`/`sqlite_schema` and row checksums. The samples are not in the repo (`*.sql` is ignored).
 
+### Column type changes (`alter`)
+- `src/use-cases/Alter.ts` is the command. `src/AlterColumn.ts` has the shared parts (target type, report types, `testOnCopy`), and `src/AlterMysql.ts`, `src/AlterPostgres.ts`, `src/AlterSqlite.ts` one class per DBMS (`inspect`, `plan`, `analyze`, `createReplica`, `differences`). They are loaded with `require` like the drivers.
+- A value "stays the same" if converting it to the new type and back gives the same text. The value check (`analyze`), the guard inside the generated migration and the comparison on the copy (`differences`) must use the same rule, or the report and the real run disagree.
+- The generated SQL can't start statements with `INSERT INTO ... VALUES`, `UPDATE` or `DELETE` (migrations reject DML). MySQL uses `CREATE TEMPORARY TABLE ... SELECT` with a `CHECK`, PostgreSQL a `DO` block with `RAISE`, SQLite `INSERT INTO ... SELECT ... FROM` (allowed: `COPY_ROWS` in `SchemasHandler`).
+- The guard must stop before any change: MySQL commits DDL, so the guard runs before the `ALTER` and only uses `SET` and temporary tables (not counted by `nonAtomicWarning`).
+- SQLite rebuilds the table (`PRAGMA foreign_keys = OFF;` first, handled by `sqlite.ts` `runSQL`; `legacy_alter_table` around the rename so views stay valid; indexes and triggers created again).
+- Tests: `tests/alter.test.ts`, every case on the three DBMS.
+
 ### SQL parsing
 - All SQL inspection goes through `src/sql.ts`. `splitStatements` returns statements without comments and with quoted text emptied, for checks only (never to run them). A `;` inside quotes, `$$` strings, parentheses or a `BEGIN ... END` / `CASE ... END` block doesn't split.
 - Data files can have many MB: copy text in chunks (`transform`), never char by char or with `slice` in a loop, and parse the file once.
