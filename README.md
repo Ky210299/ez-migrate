@@ -1,9 +1,20 @@
 # @ky210299/ez-migrate
 
+[![npm version](https://img.shields.io/npm/v/@ky210299/ez-migrate)](https://www.npmjs.com/package/@ky210299/ez-migrate)
+[![Tests](https://github.com/Ky210299/ez-migrate/actions/workflows/test.yml/badge.svg)](https://github.com/Ky210299/ez-migrate/actions/workflows/test.yml)
+[![license](https://img.shields.io/npm/l/@ky210299/ez-migrate)](https://github.com/Ky210299/ez-migrate/blob/main/LICENSE)
+[![node](https://img.shields.io/node/v/@ky210299/ez-migrate)](https://nodejs.org)
+
 A small CLI to run database migrations and seeds written in plain `.sql` files.
 Supports **MySQL**, **PostgreSQL** and **SQLite**.
 
 You write the SQL. ez-migrate runs it in order, records what was applied, and can revert it.
+
+- Up and down SQL in one file, no ORM and no JavaScript.
+- Shows the SQL and asks before running it at the terminal; runs without asking in CI.
+- Lock so several servers can run `migrate` at the same time.
+- Seeds that run once, and `baseline` to adopt an existing database.
+- Three runtime dependencies. SQLite uses the `node:sqlite` module of Node.js.
 
 ---
 
@@ -22,6 +33,7 @@ You write the SQL. ez-migrate runs it in order, records what was applied, and ca
 11. [Advantages, disadvantages and use cases](#advantages-disadvantages-and-use-cases)
 12. [Development and tests](#development-and-tests)
 13. [Changelog](#changelog)
+14. [License](#license)
 
 ---
 
@@ -37,18 +49,36 @@ ez-migrate <command>
 # In a project
 npm install --save-dev @ky210299/ez-migrate
 npx ez-migrate <command>
+
+# Without installing
+npx @ky210299/ez-migrate <command>
 ```
+
+The package name is `@ky210299/ez-migrate`. The command is `ez-migrate`.
 
 ---
 
 ## Quick start
 
 ```bash
-ez-migrate init                       # creates ez-migrate.json
-# edit ez-migrate.json and set the env vars (see Configuration)
+ez-migrate init                       # creates ez-migrate.json (dialect mysql by default)
+```
 
+Set `"dialect"` in `ez-migrate.json` to `mysql`, `postgres` or `sqlite`, and put the connection data in a `.env` file (or in env vars):
+
+```dotenv
+DB_HOST=localhost
+DB_PORT=5432
+DB_USER=postgres
+DB_PASSWORD=secret
+DB_NAME=my_app
+```
+
+For SQLite only `DB_NAME` is needed, and it is the path of the database file (`DB_NAME=./data/app.db`).
+
+```bash
 ez-migrate make create_users          # creates migrations/<timestamp>-create_users.sql
-# write the SQL in the file
+# write the up and down SQL in the file (see below)
 
 ez-migrate migrate                    # applies all pending migrations
 ez-migrate status                     # shows what is applied
@@ -77,9 +107,10 @@ DROP TABLE users;
 
 - The SQL between the two `-- ez-migration-up` lines applies the change.
 - The SQL between the two `-- ez-migration-down` lines reverts it.
-- Both sections are required and can have several statements.
+- Both sections are required and can have several statements. The new file has only comments, so `migrate` fails with `The UP migration section is empty` until you write the SQL.
+- Text outside the two sections is ignored.
 - Files run in file name order. The timestamp prefix (`YYYYMMDDHHmmssSSS`, UTC) keeps the creation order.
-- Migrations can't have DML (`INSERT`, `UPDATE`, `DELETE`). Use seeds for data.
+- The up section can't have DML (statements that start with `INSERT INTO`, `UPDATE` or `DELETE FROM`). Use seeds for data. `migrate` and `up` fail before running anything if a pending file has it.
 - The SQL is sent to the database as written, so it must be valid for your DBMS.
 
 ### Seed
@@ -91,20 +122,21 @@ INSERT INTO users (id, name) VALUES (1, 'ana');
 INSERT INTO users (id, name) VALUES (2, 'bob');
 ```
 
-- Seeds can't have DDL (`CREATE`, `ALTER`, `DROP`, `TRUNCATE`, `RENAME`).
+- Seeds can't have DDL (statements that start with `CREATE`, `ALTER`, `DROP`, `TRUNCATE` or `RENAME`).
+- Empty seed files (only comments) are skipped.
 - `ez-migrate seed` runs the seed files **not run yet**, in file name order, in one transaction. If one fails, nothing is inserted and nothing is recorded.
 - Run seeds are recorded in the table `ez_seed`, so running `seed` again only runs new files. It is safe to run it on every deploy.
 - `seed --all` runs every seed file again. Your SQL must handle data that already exists (for example `DELETE` first, or `INSERT ... ON CONFLICT DO NOTHING`).
 - `seed --fake` records the pending seeds as run without running them. Use it when the data is already in the database.
 - `seed --file <path>` runs only that file, from any folder, in one transaction, and doesn't record it. Use it for data that must not be in git, like the data file of `baseline --data`.
 
-Add `-e` to `make` to open the new file in `$EDITOR`.
+Add `-e` to `make` to open the new file in `$EDITOR` (or `$VISUAL`).
 
 ---
 
 ## Configuration
 
-`ez-migrate init` creates `ez-migrate.json` in the current folder (or `ez-migrate init <folder>` in another folder). ez-migrate always reads `./ez-migrate.json` from the folder where you run it.
+`ez-migrate init` creates `ez-migrate.json` in the current folder (or `ez-migrate init <folder>` in another folder). ez-migrate always reads `./ez-migrate.json` from the folder where you run it. If the file doesn't exist, it warns and uses the defaults below.
 
 ```json
 {
@@ -127,7 +159,7 @@ Add `-e` to `make` to open the new file in `$EDITOR`.
 | `dialect` | DBMS of the target database: `mysql`, `postgres` or `sqlite` | `mysql` |
 | `migrationsPath` | Folder of the migration files | `./migrations` |
 | `seedsPath` | Folder of the seed files | `./seeds` |
-| `sqlitePath` | Folder of the SQLite tracker file `tracker.db` | `./migrations` |
+| `sqlitePath` | SQLite only: folder of the tracker file `tracker.db`, and of `database.db` when `DB_NAME` is not set | `./migrations` |
 | `envKeys` | **Names** of the env vars with the connection data of the target database | `DB_*` |
 | `envKeys.url` | Optional. **Name** of an env var with a connection URL. See below | Not used |
 | `ssl` | Optional. SSL for MySQL and PostgreSQL. See below | No SSL |
@@ -144,8 +176,9 @@ DB_PASSWORD=secret
 DB_NAME=my_app
 ```
 
+- Env vars already set in the shell are not replaced by the `.env` file.
 - If the database doesn't exist, ez-migrate creates it (the user needs permission for that).
-- **SQLite:** only the `database` env var is used, and it is the path of the database file (`DB_NAME=./data/app.db`). Without it, `<sqlitePath>/database.db` is used.
+- **SQLite:** only the `database` env var is used, and it is the path of the database file (`DB_NAME=./data/app.db`). Without it, `<sqlitePath>/database.db` is used. The history goes in a separate file, `<sqlitePath>/tracker.db`. With the default `sqlitePath` both files are created in `./migrations`, so set `sqlitePath` to another folder or add `*.db` to `.gitignore`.
 
 ### Connection URL
 
@@ -192,7 +225,7 @@ DATABASE_URL=postgres://app:secret@db.example.com:5432/my_app?sslmode=verify-ful
 
 ### Tracker in another database
 
-By default the history is stored in the table `ez_migration` of the target database. To store it somewhere else, add `tracker`:
+By default the history is stored in the table `ez_migration` of the target database (with SQLite, in the file `<sqlitePath>/tracker.db`). To store it somewhere else, add `tracker`:
 
 ```json
 {
@@ -206,9 +239,10 @@ By default the history is stored in the table `ez_migration` of the target datab
 }
 ```
 
-- `tracker.dialect` can be `mysql`, `postgres` or `sqlite`, different from the target.
-- With a SQLite tracker the history is in `<tracker.sqlitePath>/tracker.db` and `envKeys` are not used.
-- `tracker.envKeys.url` and `tracker.ssl` work the same as in the main config.
+- `tracker.dialect` can be `mysql`, `postgres` or `sqlite`, different from the target. Default `mysql`.
+- `tracker.envKeys` defaults to `TRACKER_USER`, `TRACKER_PASSWORD`, `TRACKER_PORT`, `TRACKER_HOST` and `TRACKER_NAME`.
+- With a SQLite tracker the history is in `<tracker.sqlitePath>/tracker.db` (default `./migrations`) and `envKeys` are not used.
+- `tracker.envKeys.url` and `tracker.ssl` work the same as in the main config. The main `ssl` is not used for a tracker set with `tracker`.
 
 ---
 
@@ -267,7 +301,7 @@ CREATE TABLE users (id INTEGER PRIMARY KEY);
 Run it? [y/N] y
 ```
 
-- Any answer other than `y` / `yes` runs nothing.
+- Any answer other than `y`, `yes`, `s`, `si` or `sí` runs nothing.
 - **In CI, deploys and scripts it never asks** and runs as before: it only asks when the input and the output are a terminal and the `CI` env var is not set.
 - To skip the question: `-y, --yes`, the env var `EZ_MIGRATE_YES=1`, or `"confirm": false` in `ez-migrate.json`.
 - If there is nothing to run, it doesn't ask.
@@ -316,8 +350,10 @@ These options work with every command:
 | `--log-level <level>` | `EZ_MIGRATE_LOG_LEVEL` | `error`, `warn`, `info` (default) or `debug`. |
 | `--verbose` | | Same as `--log-level debug`. Logs the start and end of every step, with its duration in ms. |
 | `--log-format <format>` | `EZ_MIGRATE_LOG_FORMAT` | `pretty` (default) or `json`: one JSON object per line, for log tools in CI or servers. |
-| `--trace` | `EZ_MIGRATE_TRACE=1` | At the end, prints a tree with the time of each step. |
+| `--trace` | `EZ_MIGRATE_TRACE=1` | At the end, prints a tree with the time of each step (to stderr). |
 | `--trace-file <path>` | `EZ_MIGRATE_TRACE_FILE` | Writes the same timings as a Chrome trace file. Open it in [ui.perfetto.dev](https://ui.perfetto.dev) or `chrome://tracing` to see a timeline. |
+
+They can go before or after the command (`ez-migrate --verbose migrate` or `ez-migrate migrate --verbose`).
 
 Example:
 
@@ -337,6 +373,7 @@ Trace (process 64.6 ms, startup 57 ms)
 - **Find an error:** a failed migration says which file failed (`Migration <file> (up) failed: <database error>`), and the failed steps are marked `FAILED` in the trace. With `--verbose` you also get the stack trace and the original database error.
 - **Privacy:** logs and traces never include the SQL text or its values, only file names and sizes. They are safe to keep in CI logs.
 - Logs `info` and `debug` go to stdout, `warn` and `error` to stderr. The output of `status` is always printed, whatever the log level.
+- Colors are used only at a terminal. Set `NO_COLOR` to turn them off.
 
 ---
 
@@ -385,7 +422,7 @@ Notes:
 ## How tracking works
 
 - Each applied migration is a row in the table `ez_migration`: batch id, time, the up and down SQL, and the file path.
-- Each run seed file is a row in the table `ez_seed`: file name and time. Both tables are in the tracker database.
+- Each run seed file is a row in the table `ez_seed`: file name and time. Both tables are in the tracker database (by default the target database; with SQLite, `tracker.db`).
 - A **pending** migration is a file whose name is not in the table. A file with an older name added later (for example after a merge) is also applied.
 - `down`, `rollback` and `reset` use the **down SQL saved in the table**, not the current file. Editing a file after applying it does not change how it is reverted.
 - Each migration is applied and tracked on its own. If migration 3 of 5 fails, migrations 1 and 2 stay applied and tracked, and the command stops with code `1`.
@@ -399,12 +436,12 @@ Notes:
 ## Advantages, disadvantages and use cases
 
 This section is updated with each version, based on what the tests and real use show.
-*Last review: 0.13.0.*
+*Last review: 0.13.1.*
 
 ### Advantages
 
 - **Plain SQL.** No ORM, no DSL, no JavaScript in migrations. You write exactly what the database runs.
-- **Small and fast.** One CLI, one JSON config, three runtime dependencies. A command starts in about 70 ms, and only the driver of the database in use is loaded.
+- **Small and fast.** One CLI, one JSON config, three runtime dependencies. A command starts in about 100 ms, Node.js included, and only the driver of the database in use is loaded.
 - **See before you run.** At the terminal, every command that changes the schema shows the exact SQL and asks before running it. `--dry-run` prints it without asking. In CI and deploys nothing changes: it never asks there.
 - **Easy to debug.** `--trace` shows the time of each step and `--verbose` logs every step, without printing your SQL or data.
 - **Up and down in one file.** Easy to review in a pull request.
@@ -464,14 +501,16 @@ pnpm run db:down
 
 Tests run the built CLI against real databases: every command on MySQL, PostgreSQL and SQLite, and with the tracker on a different DBMS. CI runs the same on every push and pull request.
 
-Contributions: create a branch, add a test for your change, add an entry to [CHANGELOG.md](CHANGELOG.md) and open a pull request. Guidelines for coding agents are in [.github/AGENTS.md](.github/AGENTS.md).
+Contributions: create a branch, add a test for your change, add an entry to [CHANGELOG.md](https://github.com/Ky210299/ez-migrate/blob/main/CHANGELOG.md) and open a pull request. Guidelines for coding agents are in [.github/AGENTS.md](https://github.com/Ky210299/ez-migrate/blob/main/.github/AGENTS.md).
 
 ---
 
 ## Changelog
 
-See [CHANGELOG.md](CHANGELOG.md). Versions follow [Semantic Versioning](https://semver.org/) (`MAJOR.MINOR.PATCH`).
+See [CHANGELOG.md](https://github.com/Ky210299/ez-migrate/blob/main/CHANGELOG.md). Versions follow [Semantic Versioning](https://semver.org/) (`MAJOR.MINOR.PATCH`).
 
-## Author
+## License
 
-[@ky210299](https://github.com/ky210299)
+[MIT](https://github.com/Ky210299/ez-migrate/blob/main/LICENSE) © Leonardo Bazán Márquez ([@ky210299](https://github.com/ky210299))
+
+Issues and ideas: [github.com/Ky210299/ez-migrate/issues](https://github.com/Ky210299/ez-migrate/issues)
