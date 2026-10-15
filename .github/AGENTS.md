@@ -111,6 +111,14 @@ export default class Make {
 ### Schema export (`baseline`)
 - `src/SchemaDumper.ts` reads the schema and data of the target database, one method per dialect, through `DatabaseConnector.query` (raw text values, no driver parsing).
 - `tests/baseline.test.ts` checks the round trip: database A → `baseline --data` → migrate + seed on empty database B → same schema and data. Add a column type or object there when you change the dumper.
+- Objects that depend on others are ordered by hand in each `dump*` method (PostgreSQL: functions whose signature uses a table type go after the tables). The down section drops in the reverse order.
+- `dumpData` returns a data file that turns triggers and foreign keys off and on again around the inserts. `SeedHandler.readDataFile` only accepts those DDL statements (`DataLoadToggleRegExp`); keep both in sync.
+- `seed --file` runs through `DatabaseConnector.loadData`. A connector can define `loadData` when its DBMS loads data faster another way (SQLite: foreign keys off, then `PRAGMA foreign_key_check` before commit).
+- Before a release that changes the dumper, also try real sample databases (Sakila, Pagila, Chinook, Northwind): load one into database A, run `baseline --data`, migrate and `seed --file` into B, and compare `pg_dump`/`mysqldump`/`sqlite_schema` and row checksums. The samples are not in the repo (`*.sql` is ignored).
+
+### SQL parsing
+- All SQL inspection goes through `src/sql.ts`. `splitStatements` returns statements without comments and with quoted text emptied, for checks only (never to run them). A `;` inside quotes, `$$` strings, parentheses or a `BEGIN ... END` / `CASE ... END` block doesn't split.
+- Data files can have many MB: copy text in chunks (`transform`), never char by char or with `slice` in a loop, and parse the file once.
 
 ### Configuration
 - Configuration file: `ez-migrate.json` (handled by `ConfigReader`)

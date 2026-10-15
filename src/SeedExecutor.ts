@@ -14,6 +14,15 @@ export default class SeedExecutor {
         await tracer.span("seeds.run", { files: sql.length }, () => this.run(sql));
     }
 
+    /** Run a data file, like the one written by baseline --data, in one transaction */
+    async executeDataFile(sql: string) {
+        await tracer.span("data.load", {}, async () => {
+            await this.connection.testConnection()
+            await this.connection.initConnection()
+            await this.connection.loadData(sql);
+        });
+    }
+
     private async run(sql: Array<string>) {
         await this.connection.testConnection()
         await this.connection.initConnection()

@@ -84,7 +84,7 @@ export default class Baseline {
         let dataFile: string | null = null;
         let rows = 0;
         if (options.data) {
-            const data = await tracer.span("baseline.data", { tables: schema.tables.length }, () => dumper.dumpData(schema.tables));
+            const data = await tracer.span("baseline.data", { tables: schema.tables.length }, () => dumper.dumpData(schema));
             rows = data.rows;
             if (rows > 0) {
                 const dataPath = options.dataPath ?? DEFAULT_DATA_PATH;
@@ -109,6 +109,13 @@ export default class Baseline {
             );
         } else if (options.data) {
             Baseline.consoleLogger.info("The tables have no rows. No data file written");
+        }
+        const brokenRows = options.data ? await dumper.countForeignKeyViolations() : 0;
+        if (brokenRows > 0) {
+            Baseline.consoleLogger.warn(
+                `${brokenRows} rows reference rows that don't exist (SQLite doesn't check foreign keys unless they are turned on). ` +
+                "The data file will fail to load until you fix them. See them with: PRAGMA foreign_key_check",
+            );
         }
         if (schema.skipped.length > 0) {
             Baseline.consoleLogger.warn(

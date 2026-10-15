@@ -4,7 +4,7 @@ import { DEFAULT_MIGRATION_PATH } from "./constants";
 import { randomUUID } from "node:crypto";
 import { basename } from "node:path";
 import Migration from "./Migration";
-import { isEmptySQL, normalizeSQL, stripStrings } from "./sql";
+import { isEmptySQL, normalizeSQL, splitStatements } from "./sql";
 import { fileTimestamp } from "./utils";
 import { consoleLogger } from "./Logger";
 
@@ -14,7 +14,7 @@ type SchemaHandlerArguments = { migrationsPath: string };
 export default class SchemasHandler {
     /** The separator for up and down sql  */
     private readonly upDownSeparatorRegExp = /^-- ez-migration-(up|down)/gm;
-    private readonly DMLRegExp = /(?:^|;)\s*(?:INSERT\s+INTO|DELETE\s+FROM|UPDATE)\b/i
+    private readonly DMLRegExp = /^(?:INSERT\s+INTO|DELETE\s+FROM|UPDATE)\b/i
     private readonly migrationsPath: string;
     /** Migration file template. It's necessary to use this for successfuly run migrations */
     private readonly migrationSQLTemplate = `-- ez-migration-up
@@ -30,8 +30,9 @@ export default class SchemasHandler {
         mkdirSync(this.migrationsPath, {recursive: true})
 
     }
+    /** True if a statement is DML. The body of a trigger or procedure is part of its CREATE statement */
     hasDML(sql: string){
-        return this.DMLRegExp.test(stripStrings(normalizeSQL(sql)));
+        return splitStatements(sql).some(statement => this.DMLRegExp.test(statement));
     }
 
     private ensureMigrationPathExists() {

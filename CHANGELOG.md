@@ -8,6 +8,26 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-10-15
+
+### Added
+- `baseline` exports more objects, so an existing database is copied in full:
+  - All DBMS: triggers.
+  - MySQL: functions, procedures and events (without `DEFINER`, so they run with any user).
+  - PostgreSQL: extensions, domains, composite types, standalone sequences (with their current value), functions and aggregates, partitioned tables and partitions, table inheritance, rules, indexes of materialized views, disabled triggers, and comments.
+- `baseline --data` warns when a SQLite database has rows that reference rows that don't exist.
+- Tested on the Sakila (MySQL, PostgreSQL, SQLite), Pagila, Chinook (MySQL, PostgreSQL, SQLite) and Northwind sample databases: the database built from the files has the same schema and data as the original.
+
+### Changed
+- The data file of `baseline --data` loads rows exactly as they are: triggers are off while it loads, foreign keys are checked at the end (rows that reference each other in a cycle load), and sequences continue after the copied rows. Data files may turn triggers and foreign keys off and on again; other DDL is still rejected.
+- SQLite: `seed --file` turns foreign keys off while it loads and checks them all at the end. A 46k row file loads in 0.6 s instead of 9 s. If a row references a row that doesn't exist, nothing is loaded and the error names the tables.
+- Checks that look for DDL in seeds and DML in migrations read whole statements, so a trigger or procedure body with an `INSERT` is not taken as DML. They also ignore text inside PostgreSQL `$$` strings, and parse each file once.
+
+### Fixed
+- PostgreSQL: an index on a partitioned table is created on its partitions too.
+- PostgreSQL: a column only becomes `SERIAL` when its default uses its own sequence.
+- MySQL: a routine body that already ends with `;` is not exported with a second one.
+
 ## [0.11.0] - 2026-10-13
 
 ### Added

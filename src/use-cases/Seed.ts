@@ -25,10 +25,10 @@ export default class Seed {
      */
     static async runFile(path: string) {
         const config = new ConfigReader().getConfig()
-        const sql = new SeedHandler(config).readSeedFile(path);
+        const sql = new SeedHandler(config).readDataFile(path);
         const seedExecutor = new SeedExecutor(ConnectionFactory.create(config));
         try {
-            await seedExecutor.execute([sql]);
+            await seedExecutor.executeDataFile(sql);
         } finally {
             await seedExecutor.close()
         }
