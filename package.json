@@ -1,7 +1,7 @@
 {
     "name": "@ky210299/ez-migrate",
-    "version": "0.13.1",
-    "description": "Lightweight CLI for SQL migrations and seeds written in plain .sql files (MySQL, PostgreSQL, SQLite)",
+    "version": "0.14.0",
+    "description": "Lightweight, AI friendly CLI for SQL migrations and seeds written in plain .sql files (MySQL, PostgreSQL, SQLite)",
     "main": "dist/ez-migrate.js",
     "bin": {
         "ez-migrate": "dist/ez-migrate.js"
@@ -28,7 +28,13 @@
         "postgres",
         "postgresql",
         "sqlite",
-        "cli"
+        "cli",
+        "ai",
+        "ai-friendly",
+        "llm",
+        "ai-agents",
+        "claude-code",
+        "cursor"
     ],
     "author": "Leonardo Bazán Márquez",
     "license": "MIT",
