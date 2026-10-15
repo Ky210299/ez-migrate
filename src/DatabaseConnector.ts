@@ -10,6 +10,8 @@ export interface Connection {
     /** A method that returns true whether can connect to the DBMS, false otherwise */
     isConnected: () => Promise<boolean>;
     runSQL: (sql: string) => Promise<unknown>;
+    /** Run a data file. Only for databases that load data faster in another way than runSQL */
+    loadData?: (sql: string) => Promise<void>;
     /**
      * Run a read query outside a transaction and return the rows. Values are kept
      * close to their text form (dates and big numbers as strings) to write them back as SQL
@@ -58,6 +60,13 @@ class DatabaseConnector {
         await tracer.span("db.run", { db: this.connection.DBMSName, chars: sql.length }, () => this.connection.runSQL(sql));
     }
     
+    /** Run a data file (rows to insert). Uses the faster way of the database if it has one */
+    async loadData(sql: string): Promise<void> {
+        const connection = this.connection;
+        await tracer.span("db.load", { db: connection.DBMSName, chars: sql.length },
+            () => connection.loadData ? connection.loadData(sql) : connection.runSQL(sql));
+    }
+
     /** Initialize any necessary configuration of the DBMS before run the migrations.
         You must always call this before running the migration
     */

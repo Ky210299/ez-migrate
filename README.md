@@ -328,7 +328,10 @@ ez-migrate baseline --data
 
 This writes:
 
-- `migrations/<timestamp>-baseline.sql`: `CREATE` statements for all tables, indexes, foreign keys and views (and enums on PostgreSQL), in an order that works. The down section drops them. It has no data, so you commit it like any migration.
+- `migrations/<timestamp>-baseline.sql`: `CREATE` statements for the schema, in an order that works. The down section drops them. It has no data, so you commit it like any migration. It includes:
+  - All DBMS: tables, indexes, foreign keys, views and triggers.
+  - MySQL: functions, procedures and events.
+  - PostgreSQL: extensions, enums, domains, composite types, sequences, functions and aggregates, partitioned tables and their partitions, table inheritance, rules, materialized views and their indexes, and comments.
 - `ez-migrate-data/<timestamp>-baseline-data.sql` (only with `--data`): `INSERT` statements with all the current rows. The folder gets its own `.gitignore`, so **the data never goes to git**. Change the folder with `--data-path <folder>`.
 
 The migration is **recorded as applied** in the existing database, without running it, because that database already has the schema. From now on you add new migrations with `make` as usual.
@@ -345,7 +348,10 @@ Share the data file only through a private channel (or don't share it). It has a
 Notes:
 
 - `baseline` stops if the tracker already has migrations, or if the database has no tables. It never changes the existing tables.
-- Not exported: triggers, functions, procedures and standalone sequences. `baseline` lists them. Add them to a new migration by hand if you need them.
+- The data file copies the rows exactly as they are. While it loads, triggers are off (so they don't change or add rows) and foreign keys are checked at the end (so rows that reference each other in a cycle load). Sequences and auto increment counters continue after the copied rows. Load it into a new database, not into one that others are using at the same time.
+- SQLite doesn't check foreign keys unless they are turned on, so an old SQLite database can have rows that reference rows that don't exist. `baseline` warns about them, and `seed --file` fails without loading anything until you fix them (`PRAGMA foreign_key_check` lists them).
+- Not exported: permissions (`GRANT`), owners, row level security policies, and objects in other schemas (PostgreSQL uses the current schema). Objects the user can't read are listed by `baseline`, so you can add them by hand.
+- Tested on the Sakila, Pagila, Chinook and Northwind sample databases: the database built from the files has the same schema and data as the original.
 - `--data` reads every table into memory. For big databases, use `baseline` without `--data` and copy the data with the DBMS tools (`pg_dump --data-only`, `mysqldump --no-create-info`).
 - The data file is not a seed. It is not recorded, so `seed --file` runs it every time you call it. Data that belongs in git (roles, countries, settings) goes in normal seed files.
 - Review the generated SQL. It is plain SQL for your DBMS, so you can edit it before committing.
@@ -370,7 +376,7 @@ Notes:
 ## Advantages, disadvantages and use cases
 
 This section is updated with each version, based on what the tests and real use show.
-*Last review: 0.11.0.*
+*Last review: 0.12.0.*
 
 ### Advantages
 
@@ -386,7 +392,7 @@ This section is updated with each version, based on what the tests and real use 
 - **Safe to run from several servers.** A lock on the tracker makes concurrent runs wait, so no migration runs twice.
 - **Connects to managed databases.** Connection URL and SSL with certificate checks, on MySQL and PostgreSQL.
 - **Seeds run once.** `seed` only runs new seed files, so it can run on every deploy.
-- **Easy to adopt.** `baseline` turns an existing database into a first migration in one command, on all three DBMS. The current data can be exported too, to a folder that git ignores.
+- **Easy to adopt.** `baseline` turns an existing database into a first migration in one command, on all three DBMS, including triggers, functions, procedures, sequences and partitions. The current data can be exported too, to a folder that git ignores, and loads with the same result as the original. Tested on the Sakila, Pagila, Chinook and Northwind sample databases.
 - **Works with branches.** Migrations merged later with an older name are still applied.
 - **Script friendly.** Exit code `1` on errors.
 
@@ -395,7 +401,7 @@ This section is updated with each version, based on what the tests and real use 
 - **MySQL migrations are not atomic.** A migration with several DDL statements can be left half applied. ez-migrate warns before running it and says what to undo if it fails, but it can't undo it for you. See [How tracking works](#how-tracking-works).
 - **No data migrations.** You can't run an `UPDATE` to fill a new column inside a migration. You need a seed or a separate script.
 - **Edited seeds don't run again.** A seed is recorded by file name. If you change a seed that already ran, create a new seed file or use `seed --all`.
-- **`baseline` has limits.** It doesn't export triggers, functions or procedures, and `--data` loads all rows in memory, so it is not for big databases.
+- **`baseline` has limits.** It doesn't export permissions, row level security policies or other PostgreSQL schemas, and `--data` loads all rows in memory, so it is not for big databases.
 - **SQL is not portable.** A migration written for PostgreSQL may not run on MySQL.
 - **Not 1.0 yet.** The config and the CLI may still change between minor versions. Read the changelog before updating.
 - **CLI only.** There is no JavaScript API to run migrations from code.
@@ -419,7 +425,7 @@ This section is updated with each version, based on what the tests and real use 
 - Projects that must run the same migrations on several DBMS.
 - Running migrations from application code.
 - Copying big production databases with `baseline --data`. Use the DBMS backup tools for the data.
-- Databases whose logic lives in triggers and stored procedures, unless you add them to migrations by hand.
+- PostgreSQL databases split in several schemas, or that depend on permissions and row level security in the migrations.
 
 ---
 

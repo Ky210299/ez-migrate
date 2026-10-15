@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
+import { DatabaseSync } from "node:sqlite";
 
 import { createProject, Dialect, DIALECTS, Project } from "./helpers";
 
@@ -31,7 +32,14 @@ const SCHEMA: Record<Dialect, Array<string>> = {
             INDEX idx_status (status)
         )`,
         "CREATE VIEW paid_orders AS SELECT id, total FROM a_orders WHERE status = 'paid'",
-        "CREATE TRIGGER trg_orders BEFORE INSERT ON a_orders FOR EACH ROW SET NEW.total = NEW.total",
+        // Changes the rows: if it ran while the data loads, the copy would have other totals
+        "CREATE TRIGGER trg_orders BEFORE INSERT ON a_orders FOR EACH ROW SET NEW.total = NEW.total + 1",
+        "CREATE FUNCTION add_one(x INT) RETURNS INT DETERMINISTIC RETURN x + 1",
+        `CREATE PROCEDURE count_orders(OUT n INT) BEGIN
+            DECLARE total INT DEFAULT 0;
+            SELECT COUNT(*) INTO total FROM a_orders;
+            IF total > 0 THEN SET n = total; ELSE SET n = 0; END IF;
+        END`,
         `INSERT INTO customers (email, name, balance, created_at, born, profile, avatar, manager_id) VALUES
             ('ana@x.com', 'Ana', 10.50, '2024-01-02 03:04:05.678', '1990-05-06', '{"tags": ["a", "b"]}', X'00FF10', NULL),
             ('bob@y.com', 'O''Brien \\\\ "q"', 0, '2024-02-03 00:00:00.000', NULL, NULL, NULL, 1),
@@ -40,6 +48,9 @@ const SCHEMA: Record<Dialect, Array<string>> = {
     ],
     postgres: [
         "CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy')",
+        "CREATE DOMAIN positive AS NUMERIC CHECK (VALUE > 0)",
+        "CREATE SEQUENCE invoice_no START 1000 INCREMENT 5",
+        "SELECT nextval('invoice_no'), nextval('invoice_no')",
         `CREATE TABLE customers (
             id SERIAL PRIMARY KEY,
             email TEXT NOT NULL UNIQUE,
@@ -66,14 +77,34 @@ const SCHEMA: Record<Dialect, Array<string>> = {
         "CREATE UNIQUE INDEX idx_lower_email ON customers (lower(email))",
         "CREATE VIEW big_orders AS SELECT id, total FROM a_orders WHERE total > 10",
         "CREATE MATERIALIZED VIEW order_totals AS SELECT customer_id, sum(total) AS total FROM a_orders GROUP BY customer_id",
+        "CREATE UNIQUE INDEX idx_order_totals ON order_totals (customer_id)",
         "CREATE FUNCTION touch() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$",
         "CREATE TRIGGER trg_touch BEFORE UPDATE ON customers FOR EACH ROW EXECUTE FUNCTION touch()",
+        // Changes the rows: if it ran while the data loads, the copy would have other totals
+        "CREATE FUNCTION add_one_total() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN NEW.total := NEW.total + 1; RETURN NEW; END $$",
+        "CREATE TRIGGER trg_orders BEFORE INSERT ON a_orders FOR EACH ROW EXECUTE FUNCTION add_one_total()",
+        // Its return type is a table, so it is created after the tables and dropped before them
+        "CREATE FUNCTION rich_customers() RETURNS SETOF customers LANGUAGE sql AS 'SELECT * FROM customers WHERE balance > 0'",
+        "CREATE TABLE events (id INTEGER NOT NULL, at DATE NOT NULL, amount positive) PARTITION BY RANGE (at)",
+        "CREATE TABLE events_2024 PARTITION OF events FOR VALUES FROM ('2024-01-01') TO ('2025-01-01')",
+        "CREATE TABLE events_2025 PARTITION OF events FOR VALUES FROM ('2025-01-01') TO ('2026-01-01')",
+        "CREATE INDEX idx_events_at ON events (at)",
+        "CREATE TABLE notes_archive (archived_on DATE) INHERITS (notes)",
+        "CREATE RULE keep_notes AS ON DELETE TO notes DO INSTEAD NOTHING",
+        "COMMENT ON TABLE customers IS 'People who buy'",
+        "COMMENT ON COLUMN customers.email IS 'Used to log in'",
         `INSERT INTO customers (email, name, balance, created_at, born, active, feeling, tags, profile, avatar, manager_id) VALUES
             ('ana@x.com', 'Ana', 10.50, '2024-01-02 03:04:05.678+00', '1990-05-06', true, 'happy', '{a,"b c"}', '{"k": [1, 2]}', '\\x00ff10', NULL),
             ('bob@y.com', 'O''Brien \\ "q"', 0, '2024-02-03 00:00:00+02', NULL, false, NULL, NULL, NULL, NULL, 1),
             ('eve@z.com', NULL, -3.25, '2024-03-04 05:06:07+00', '2000-01-01', true, 'sad', '{}', '[]', '\\x', 2)`,
         "INSERT INTO a_orders (customer_id, total) VALUES (1, 99.99), (2, 5), (1, 0.01)",
         "INSERT INTO notes (id, body) VALUES (7, 'seven')",
+        "INSERT INTO notes_archive (id, body, archived_on) VALUES (8, 'old', '2020-01-01')",
+        "INSERT INTO events VALUES (1, '2024-05-01', 10), (2, '2025-05-01', 20)",
+        // A cycle: customers and orders reference each other
+        "ALTER TABLE customers ADD COLUMN last_order_id BIGINT REFERENCES a_orders (id)",
+        "UPDATE customers SET last_order_id = 1 WHERE id = 1",
+        "REFRESH MATERIALIZED VIEW order_totals",
     ],
     sqlite: [
         `CREATE TABLE customers (
@@ -92,7 +123,15 @@ const SCHEMA: Record<Dialect, Array<string>> = {
         )`,
         "CREATE INDEX idx_orders_customer ON a_orders (customer_id)",
         "CREATE VIEW big_orders AS SELECT id, total FROM a_orders WHERE total > 10",
-        "CREATE TRIGGER trg_orders AFTER INSERT ON a_orders BEGIN SELECT 1; END",
+        "CREATE TABLE order_log (order_id INTEGER)",
+        // Adds rows: if it ran while the data loads, the copy would have more rows in order_log
+        "CREATE TRIGGER trg_orders AFTER INSERT ON a_orders BEGIN INSERT INTO order_log VALUES (NEW.id); END",
+        // A cycle: stores and staff reference each other
+        "CREATE TABLE stores (id INTEGER PRIMARY KEY, manager_id INTEGER REFERENCES staff (id))",
+        "CREATE TABLE staff (id INTEGER PRIMARY KEY, store_id INTEGER NOT NULL REFERENCES stores (id))",
+        "INSERT INTO stores (id) VALUES (1)",
+        "INSERT INTO staff VALUES (1, 1)",
+        "UPDATE stores SET manager_id = 1",
         `INSERT INTO customers (email, name, balance, avatar, manager_id) VALUES
             ('ana@x.com', 'Ana', 10.5, X'00FF10', NULL),
             ('bob@y.com', 'O''Brien \\ "q"', 0, NULL, 1),
@@ -112,6 +151,12 @@ async function describeSchema(p: Project): Promise<unknown> {
                 .replace(/ DEFINER=`[^`]*`@`[^`]*`/, "")
                 .replace(/`ezm_[0-9a-f]+`\./g, "");
         }
+        // MySQL keeps the ";" after a body that is not BEGIN ... END when more statements follow it in the same query
+        const body = (sql: unknown) => String(sql).replace(/\s*;$/, "");
+        out.routines = (await p.query(`SELECT ROUTINE_NAME, ROUTINE_TYPE, ROUTINE_DEFINITION FROM information_schema.ROUTINES
+            WHERE ROUTINE_SCHEMA = '${p.database}' ORDER BY 1`)).map(r => ({ ...r, ROUTINE_DEFINITION: body(r.ROUTINE_DEFINITION) }));
+        out.triggers = (await p.query(`SELECT TRIGGER_NAME, ACTION_TIMING, EVENT_MANIPULATION, ACTION_STATEMENT FROM information_schema.TRIGGERS
+            WHERE TRIGGER_SCHEMA = '${p.database}' ORDER BY 1`)).map(r => ({ ...r, ACTION_STATEMENT: body(r.ACTION_STATEMENT) }));
         return out;
     }
     if (p.dialect === "postgres") {
@@ -127,14 +172,29 @@ async function describeSchema(p: Project): Promise<unknown> {
             indexes: await p.query("SELECT indexname, indexdef FROM pg_indexes WHERE schemaname = 'public' AND tablename NOT LIKE 'ez_%' ORDER BY 1"),
             views: await p.query("SELECT c.relname, c.relkind, pg_get_viewdef(c.oid) AS def FROM pg_class c WHERE c.relkind IN ('v', 'm') AND c.relnamespace = 'public'::regnamespace ORDER BY 1"),
             types: await p.query("SELECT t.typname, e.enumlabel FROM pg_enum e JOIN pg_type t ON t.oid = e.enumtypid ORDER BY 1, e.enumsortorder"),
+            domains: await p.query("SELECT t.typname, pg_get_constraintdef(c.oid) AS def FROM pg_type t JOIN pg_constraint c ON c.contypid = t.oid ORDER BY 1"),
+            sequences: await p.query("SELECT sequencename, start_value, increment_by, last_value FROM pg_sequences WHERE schemaname = 'public' ORDER BY 1"),
+            functions: await p.query("SELECT proname, pg_get_functiondef(oid) AS def FROM pg_proc WHERE pronamespace = 'public'::regnamespace ORDER BY 1"),
+            triggers: await p.query("SELECT tgname, tgenabled, pg_get_triggerdef(oid) AS def FROM pg_trigger WHERE NOT tgisinternal ORDER BY 1"),
+            rules: await p.query("SELECT rulename, definition FROM pg_rules WHERE schemaname = 'public' ORDER BY 1"),
+            inherits: await p.query("SELECT inhrelid::regclass::text AS child, inhparent::regclass::text AS parent FROM pg_inherits ORDER BY 1"),
+            partitions: await p.query("SELECT relname, pg_get_expr(relpartbound, oid) AS bound FROM pg_class WHERE relispartition ORDER BY 1"),
+            comments: await p.query("SELECT objoid::regclass::text AS object, objsubid, description FROM pg_description WHERE classoid = 'pg_class'::regclass ORDER BY 1, 2"),
         };
     }
-    return p.query("SELECT type, name, sql FROM sqlite_schema WHERE name NOT LIKE 'ez_%' AND type <> 'trigger' AND name NOT LIKE 'sqlite_%' ORDER BY name");
+    return p.query("SELECT type, name, sql FROM sqlite_schema WHERE name NOT LIKE 'ez_%' AND name NOT LIKE 'sqlite_%' ORDER BY name");
 }
+
+/** Tables to compare, with the columns to sort them by */
+const DATA: Record<Dialect, Record<string, string>> = {
+    mysql: { customers: "id", a_orders: "id" },
+    postgres: { customers: "id", a_orders: "id", notes: "id", notes_archive: "id", events: "id" },
+    sqlite: { customers: "id", a_orders: "id", order_log: "order_id", stores: "id", staff: "id" },
+};
 
 async function describeData(p: Project) {
     const out: Record<string, unknown> = {};
-    for (const t of ["customers", "a_orders"]) out[t] = await p.query(`SELECT * FROM ${t} ORDER BY id`);
+    for (const [t, order] of Object.entries(DATA[p.dialect])) out[t] = await p.query(`SELECT * FROM ${t} ORDER BY ${order}`);
     return out;
 }
 
@@ -170,8 +230,8 @@ describe.each(DIALECTS)("baseline [%s]", (dialect) => {
         const result = source.run("baseline", "--data");
         expect(result.output).toMatch(/marked as applied/);
         expect(result.code).toBe(0);
-        // Triggers and functions are not exported, and the user is told
-        expect(result.output).toMatch(/Not exported[\s\S]*trg_/);
+        // Triggers, functions, procedures, sequences, partitions... are all exported
+        expect(result.output).not.toMatch(/Not exported/);
 
         // The source database is not changed and nothing is pending
         const migrations = readdirSync(join(source.dir, "migrations"));
@@ -207,8 +267,12 @@ describe.each(DIALECTS)("baseline [%s]", (dialect) => {
         expect(await describeSchema(copy)).toEqual(await describeSchema(source));
         expect(await describeData(copy)).toEqual(await describeData(source));
 
+        // The triggers work again after the data loads
+        if (dialect === "sqlite") expect(await copy.query("SELECT COUNT(*) AS n FROM order_log")).toEqual([{ n: 3 }]);
         // Auto increment ids continue after the copied rows
         await copy.query("INSERT INTO a_orders (customer_id, total) VALUES (3, 1)");
+        if (dialect === "sqlite") expect(await copy.query("SELECT COUNT(*) AS n FROM order_log")).toEqual([{ n: 4 }]);
+        else expect(await copy.query("SELECT total FROM a_orders WHERE id = 4")).toEqual([{ total: "2.00" }]);
         const [last] = await copy.query("SELECT MAX(id) AS id FROM a_orders");
         expect(Number(last.id)).toBe(4);
         if (dialect === "postgres") {
@@ -219,6 +283,14 @@ describe.each(DIALECTS)("baseline [%s]", (dialect) => {
         // The down SQL removes everything
         expect(copy.run("rollback").code).toBe(0);
         expect(await copy.tables()).toEqual([]);
+        if (dialect === "postgres") {
+            expect(await copy.query(`SELECT relname FROM pg_class WHERE relnamespace = 'public'::regnamespace AND relname NOT LIKE 'ez_%'
+                UNION ALL SELECT typname FROM pg_type WHERE typnamespace = 'public'::regnamespace AND typtype IN ('e', 'd')
+                UNION ALL SELECT proname FROM pg_proc WHERE pronamespace = 'public'::regnamespace`)).toEqual([]);
+        }
+        if (dialect === "mysql") {
+            expect(await copy.query(`SELECT ROUTINE_NAME FROM information_schema.ROUTINES WHERE ROUTINE_SCHEMA = '${copy.database}'`)).toEqual([]);
+        }
     });
 
     it("works without --data and with a custom name", async () => {
@@ -229,7 +301,7 @@ describe.each(DIALECTS)("baseline [%s]", (dialect) => {
         expect(readdirSync(join(source.dir, "migrations"))[0]).toMatch(/-initial_schema\.sql$/);
         expect(existsSync(join(source.dir, "ez-migrate-data"))).toBe(false);
         const sql = readFileSync(join(source.dir, "migrations", readdirSync(join(source.dir, "migrations"))[0]), "utf8");
-        expect(sql).not.toMatch(/INSERT/i);
+        expect(sql).not.toMatch(/ana@x\.com/);
     });
 
     it("refuses when the database already uses ez-migrate", async () => {
@@ -268,5 +340,40 @@ describe.each(DIALECTS)("baseline [%s]", (dialect) => {
         expect(files).toHaveLength(2);
         expect(files[0]).toBe(".gitignore");
         expect(files[1]).toMatch(/-baseline-data\.sql$/);
+    });
+});
+
+describe("baseline [sqlite] with rows that break foreign keys", () => {
+    it("warns, and loading the data file fails without loading anything", async () => {
+        const source = project("sqlite");
+        await source.setup([]);
+        // SQLite doesn't check foreign keys unless they are turned on, so a database can have broken rows
+        const db = new DatabaseSync(join(source.dir, "db", `${source.database}.db`));
+        db.exec(`PRAGMA foreign_keys = OFF;
+            CREATE TABLE parents (id INTEGER PRIMARY KEY);
+            CREATE TABLE children (id INTEGER PRIMARY KEY, parent_id INTEGER REFERENCES parents (id));
+            INSERT INTO parents VALUES (1);
+            INSERT INTO children VALUES (1, 1), (2, 99);`);
+        db.close();
+
+        const result = source.run("baseline", "--data");
+        expect(result.code).toBe(0);
+        expect(result.output).toMatch(/1 rows reference rows that don't exist/);
+
+        const copy = project("sqlite");
+        copyDir(join(source.dir, "migrations"), join(copy.dir, "migrations"));
+        expect(copy.run("migrate").code).toBe(0);
+        const dataDir = join(source.dir, "ez-migrate-data");
+        const dataFile = join(dataDir, readdirSync(dataDir).find(f => f.endsWith(".sql"))!);
+        const seed = copy.run("seed", "--file", dataFile);
+        expect(seed.code).toBe(1);
+        expect(seed.output).toMatch(/1 rows reference rows that don't exist \(tables: children\)/);
+        expect(await copy.query("SELECT COUNT(*) AS n FROM parents")).toEqual([{ n: 0 }]);
+
+        // After fixing the row, the file loads
+        const fixed = readFileSync(dataFile, "utf8").replace("(2, 99)", "(2, 1)");
+        writeFileSync(dataFile, fixed);
+        expect(copy.run("seed", "--file", dataFile).code).toBe(0);
+        expect(await copy.query("SELECT COUNT(*) AS n FROM children")).toEqual([{ n: 2 }]);
     });
 });

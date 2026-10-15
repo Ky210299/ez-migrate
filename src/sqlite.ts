@@ -51,6 +51,34 @@ export default class SqliteConnection implements SqliteConnectionInterface {
         }
     }
     
+    /**
+     * Run a data file in a transaction with foreign keys off, then check them all
+     * at once. Checking them row by row is very slow when rows reference rows
+     * inserted later. If a row references a row that doesn't exist, nothing is loaded.
+     */
+    async loadData(sql: string): Promise<void> {
+        const db = this.open();
+        // SQLite ignores this PRAGMA inside a transaction, so it goes before BEGIN
+        db.exec("PRAGMA foreign_keys = OFF");
+        try {
+            db.exec("BEGIN");
+            try {
+                db.exec(sql);
+                const broken = db.prepare("PRAGMA foreign_key_check").all() as Array<{ table: string }>;
+                if (broken.length > 0) {
+                    const tables = [...new Set(broken.map(row => row.table))].join(", ");
+                    throw new Error(`${broken.length} rows reference rows that don't exist (tables: ${tables}). Nothing was loaded`);
+                }
+                db.exec("COMMIT");
+            } catch (err) {
+                db.exec("ROLLBACK");
+                throw err;
+            }
+        } finally {
+            db.exec("PRAGMA foreign_keys = ON");
+        }
+    }
+
     async query(sql: string, values: Array<unknown> = []): Promise<Array<Row>> {
         return this.open().prepare(sql).all(...(values as Array<string | number | null>)) as Array<Row>;
     }
