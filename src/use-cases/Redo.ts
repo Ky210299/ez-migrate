@@ -8,7 +8,7 @@ export default class Redo {
     /** Revert the last migration and apply the same migration file again, holding the lock for both steps */
     static async run(options: RunOptions = {}) {
         const config = new ConfigReader().getConfig();
-        const schemaHandler = new SchemasHandler({ migrationsPath: config.migrationsPath });
+        const schemaHandler = SchemasHandler.forConfig(config);
         await runPlan(
             config,
             options,

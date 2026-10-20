@@ -151,7 +151,7 @@ export default class Alter {
         }
         if (result.safe && !options.dryRun && result.sql != null) {
             const name = options.name ?? `alter-${table}-${column}`.replace(/[^\w.-]+/g, "_");
-            const schemaHandler = new SchemasHandler({ migrationsPath: config.migrationsPath });
+            const schemaHandler = SchemasHandler.forConfig(config);
             result.file = schemaHandler.writeMigrationFile(name, result.sql.up, result.sql.down);
         }
         // The result is the output of the command, not a log line
@@ -181,7 +181,7 @@ export default class Alter {
 
     /** The change is planned on the database as it is now: pending migrations would change it */
     private static async checkNoPending(config: Config) {
-        const schemaHandler = new SchemasHandler({ migrationsPath: config.migrationsPath });
+        const schemaHandler = SchemasHandler.forConfig(config);
         const files = schemaHandler.getAllMigrations().map(path => basename(path));
         const pending = await withTracker(config, async tracker => {
             const applied = new Set((await tracker.listMigrations()).map(m => basename(m.getDetails().path)));

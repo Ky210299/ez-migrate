@@ -8,6 +8,19 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-10-20
+
+### Added
+- Tenants: the same migrations for many clients. `tenants` in `ez-migrate.json` lists the clients, each one in a PostgreSQL schema, a database, another server (`url`, the name of an env var) or a SQLite file. The list can be in the config (`list`), in a JSON file (`file`) or come from a query on the main database (`query`).
+- `--tenant <name>` (or `EZ_MIGRATE_TENANT`) runs any command for one tenant. `--all-tenants` and `--tenant a,b` run `migrate` and `status` for several, one after the other, with a summary at the end. `migrate` stops at the first tenant that fails; `--continue-on-error` runs the rest. `--dry-run`, `--json` and the confirmation question work for several tenants too.
+- Migrations of only one tenant in `<tenants.migrationsPath>/<name>/` (default `./tenants/<name>/`). They run with the common ones, in file name order. `make --tenant <name>` writes there.
+- Each tenant has its own history and lock, inside the tenant, so two servers can migrate two tenants at the same time.
+- A tenant migration or seed is rejected before running if it would change something outside its tenant: another tenant's schema or database, an object of another schema (`public.x`), `SET search_path`, `USE`, `ATTACH`, `SET SCHEMA`. `check --tenant <name>` reports it as `outside-tenant`.
+- Logs of a tenant have `tenant=<name>` in every line.
+
+### Fixed
+- PostgreSQL: two ez-migrate creating the same new database at the same time could fail with `duplicate key value violates unique constraint "pg_database_datname_index"`. Now the second one uses the database the first one created.
+
 ## [0.15.0] - 2026-10-15
 
 ### Added

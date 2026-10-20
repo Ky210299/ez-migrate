@@ -67,7 +67,7 @@ export default class Baseline {
         written: Array<string>,
     ) {
         const name = options.name ?? "baseline";
-        const schemaHandler = new SchemasHandler({ migrationsPath: config.migrationsPath });
+        const schemaHandler = SchemasHandler.forConfig(config);
         const done = await tracker.listMigrations();
         if (done.length > 0) {
             throw new Error("The tracker already has applied migrations. baseline is only for databases that don't use ez-migrate yet");

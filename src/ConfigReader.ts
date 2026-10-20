@@ -3,6 +3,7 @@ import { isErrnoException, logErrorMessage } from "./Errors";
 import { CONFIG_PATH, DEFAULT_CONFIG, MIGRATIONS_DIALECTS } from "./constants";
 
 import { consoleLogger } from "./Logger";
+import { currentTenant } from "./Tenants";
 
 import type { Config } from "./types";
 
@@ -43,6 +44,8 @@ export default class ConfigReader {
             };
         }
         this.validateConfig();
+        // --tenant <name>: the command runs on that tenant. A "tenant" key in the file is ignored
+        this.config.tenant = currentTenant();
     }
 
     private readConfig() {

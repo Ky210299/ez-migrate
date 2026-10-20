@@ -5,6 +5,7 @@ import { nonAtomicWarning } from "./MigrationExecutor";
 import SchemasHandler from "./SchemasHandler";
 import SeedHandler from "./SeedHandler";
 import type { Config } from "./types";
+import { crossTenantProblem, tenantSettings } from "./Tenants";
 
 export type ProblemLevel = "error" | "warning";
 
@@ -102,7 +103,7 @@ function findSecrets(file: string, text: string): Array<Problem> {
  */
 export function checkFiles(config: Config): { files: number, problems: Array<Problem> } {
     const problems: Array<Problem> = [];
-    const schemaHandler = new SchemasHandler({ migrationsPath: config.migrationsPath });
+    const schemaHandler = SchemasHandler.forConfig(config);
     const migrations = schemaHandler.getAllMigrations();
     for (const path of migrations) {
         const text = readFileSync(path, "utf8");
@@ -120,6 +121,13 @@ export function checkFiles(config: Config): { files: number, problems: Array<Pro
         }
         for (const { name } of DESTRUCTIVE.filter(d => d.name === "DROP TABLE" ? dropsExistingTable(up) : statements.some(s => d.regexp.test(s)))) {
             problems.push({ file: path, level: "warning", rule: "destructive", message: `The up section has ${name}. The data it deletes can't be recovered with the down section` });
+        }
+        if (config.tenant != null) {
+            const tenant = config.tenant;
+            const others = tenantSettings.list.filter(t => t.name !== tenant.name);
+            const { down } = schemaHandler.makeMigrationFromFile(path).getDetails();
+            const problem = crossTenantProblem(config.dialect, up, tenant, others) ?? crossTenantProblem(config.dialect, down, tenant, others);
+            if (problem) problems.push({ file: path, level: "error", rule: "outside-tenant", message: `It can't run for tenant ${tenant.name}: ${problem}` });
         }
         const notAtomic = nonAtomicWarning(config.dialect, up);
         if (notAtomic) problems.push({ file: path, level: "warning", rule: "not-atomic", message: notAtomic });

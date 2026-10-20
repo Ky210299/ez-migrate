@@ -11,8 +11,8 @@ export default class Make {
             return
         }
         const config = new ConfigReader().getConfig()
-        const { migrationsPath } = config
-        const schemaHandler = new SchemasHandler({ migrationsPath });
+        // With --tenant the file goes to the folder of that tenant
+        const schemaHandler = SchemasHandler.forConfig(config);
         const path = schemaHandler.makeMigrationFile(name);
         return path
     }

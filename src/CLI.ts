@@ -19,6 +19,7 @@ import { openEditor } from "./utils";
 import { consoleLogger, LOG_FORMATS, LOG_LEVELS } from "./Logger";
 import { tracer } from "./Tracer";
 import { DEFAULT_LOCK_TIMEOUT_S, lockSettings, parseLockTimeout } from "./Lock";
+import { prepareTenants } from "./TenantRunner";
 
 const program = new Command();
 
@@ -37,10 +38,13 @@ program
   .option("--trace", "Print how long each step took at the end (env EZ_MIGRATE_TRACE=1)")
   .option("--trace-file <path>", "Write the timings as a Chrome trace file, to open in https://ui.perfetto.dev (env EZ_MIGRATE_TRACE_FILE)")
   .option("--lock-timeout <seconds>", `Seconds to wait while another ez-migrate changes the same database (default ${DEFAULT_LOCK_TIMEOUT_S}, env EZ_MIGRATE_LOCK_TIMEOUT)`)
-  .hook("preAction", () => {
-    const { logLevel, verbose, logFormat, lockTimeout } = program.opts();
+  .option("--tenant <names>", "Run for these tenants of the config, comma separated (env EZ_MIGRATE_TENANT)")
+  .option("--all-tenants", "Run for every tenant of the config (migrate and status)")
+  .hook("preAction", async (_program, command) => {
+    const { logLevel, verbose, logFormat, lockTimeout, tenant, allTenants } = program.opts();
     consoleLogger.configure({ level: verbose ? "debug" : logLevel, format: logFormat });
     if (lockTimeout != null) lockSettings.timeoutMs = parseLockTimeout(lockTimeout);
+    await prepareTenants(command.name(), { tenant, allTenants });
   })
   .action(traced("status", Status.run));
 
@@ -94,6 +98,7 @@ program
   .command("migrate")
   .description("Run all pending migrations")
   .option("--allow-changed", "Run even if a migration file changed after it was applied")
+  .option("--continue-on-error", "With several tenants: keep migrating the next tenants after one fails")
   .option("--dry-run", "Print the SQL that would run, without running it")
   .option("--json", "With --dry-run: print the plan as JSON")
   .option("-y, --yes", "Run without showing the plan and asking first (env EZ_MIGRATE_YES=1)")
