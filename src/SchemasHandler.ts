@@ -7,6 +7,7 @@ import Migration from "./Migration";
 import { isEmptySQL, normalizeSQL, splitStatements } from "./sql";
 import { fileTimestamp } from "./utils";
 import { consoleLogger } from "./Logger";
+import type { Config } from "./types";
 
 /**
  * INSERT INTO a (...) SELECT ... FROM b, without values (strings or numbers),
@@ -16,7 +17,11 @@ import { consoleLogger } from "./Logger";
  */
 const COPY_ROWS = /^INSERT\s+INTO\s+[\w$."`[\]]+\s*(?:\([^()]*\)\s*)?SELECT\b(?![\s\S]*(?:\bVALUES\b|'|\b\d))[\s\S]*\bFROM\b/i;
 
-type SchemaHandlerArguments = { migrationsPath: string };
+type SchemaHandlerArguments = {
+    migrationsPath: string,
+    /** Folder of the migrations of only one tenant. They run with the common ones, in file name order */
+    tenantPath?: string,
+};
 
 /** Class for handle the migrations file schemas */
 export default class SchemasHandler {
@@ -24,6 +29,7 @@ export default class SchemasHandler {
     private readonly upDownSeparatorRegExp = /^-- ez-migration-(up|down)/gm;
     private readonly DMLRegExp = /^(?:INSERT\s+INTO|DELETE\s+FROM|UPDATE)\b/i
     private readonly migrationsPath: string;
+    private readonly tenantPath: string | undefined;
     /** Migration file template. It's necessary to use this for successfuly run migrations */
     private readonly migrationSQLTemplate = `-- ez-migration-up
     -- Write the SQL to apply the migration here
@@ -33,10 +39,16 @@ export default class SchemasHandler {
     -- Write the SQL to revert the migration here
 -- ez-migration-down
 `.trim();
-    constructor({ migrationsPath }: SchemaHandlerArguments) {
+    constructor({ migrationsPath, tenantPath }: SchemaHandlerArguments) {
         this.migrationsPath = migrationsPath ?? DEFAULT_MIGRATION_PATH;
+        this.tenantPath = tenantPath;
         mkdirSync(this.migrationsPath, {recursive: true})
 
+    }
+
+    /** Handler of the migrations of the config: the common ones and, with a tenant, its own ones */
+    static forConfig(config: Config) {
+        return new SchemasHandler({ migrationsPath: config.migrationsPath, tenantPath: config.tenant?.migrationsPath });
     }
     /** True if a statement is DML. The body of a trigger or procedure is part of its CREATE statement */
     hasDML(sql: string){
@@ -107,8 +119,11 @@ export default class SchemasHandler {
         if (!name) throw new Error("Name is needed for create a new migration file");
 
         const now = fileTimestamp();
-        const endWithSlash = this.migrationsPath.endsWith("/");
-        const path = `${this.migrationsPath}${endWithSlash ? "" : "/"}${now}-${name}.sql`;
+        // With a tenant, new migrations are only for that tenant
+        const folder = this.tenantPath ?? this.migrationsPath;
+        mkdirSync(folder, { recursive: true });
+        const endWithSlash = folder.endsWith("/");
+        const path = `${folder}${endWithSlash ? "" : "/"}${now}-${name}.sql`;
 
         if (existsSync(path)) throw new Error("The migration file already exists");
         writeFileSync(path, this.migrationSQLTemplate);
@@ -225,7 +240,14 @@ export default class SchemasHandler {
     
     getAllMigrations() {
         const schemasFilesNames = this.getSchemasFilesName();
-        return this.addMigrationPathToSchemasName(schemasFilesNames).sort();
+        const common = this.addMigrationPathToSchemasName(schemasFilesNames).sort();
+        if (this.tenantPath == null || !existsSync(this.tenantPath)) return common;
+        const own = readdirSync(this.tenantPath).filter(name => name.endsWith(".sql")).map(name => `${this.tenantPath}/${name}`);
+        // The tracker knows a migration by its file name, so a name can't be in both folders
+        const commonNames = new Set(schemasFilesNames);
+        const repeated = own.find(path => commonNames.has(basename(path)));
+        if (repeated) throw new Error(`${basename(repeated)} is in ${this.migrationsPath} and in ${this.tenantPath}. Rename one of them`);
+        return [...common, ...own].sort((a, b) => basename(a) < basename(b) ? -1 : basename(a) > basename(b) ? 1 : 0);
     }
     
     /**

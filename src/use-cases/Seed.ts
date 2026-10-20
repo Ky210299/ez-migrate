@@ -1,4 +1,5 @@
 import ConfigReader from "../ConfigReader";
+import { assertSqlOnlyChangesTenant } from "../Tenants";
 import ConnectionFactory from "../ConnectionFactory";
 import { consoleLogger } from "../Logger";
 import Migration from "../Migration";
@@ -26,6 +27,7 @@ export default class Seed {
     static async runFile(path: string) {
         const config = new ConfigReader().getConfig()
         const sql = new SeedHandler(config).readDataFile(path);
+        assertSqlOnlyChangesTenant(config, `File ${path}`, sql);
         const seedExecutor = new SeedExecutor(ConnectionFactory.create(config));
         try {
             await seedExecutor.executeDataFile(sql);
@@ -50,6 +52,7 @@ export default class Seed {
                 Seed.consoleLogger.info("No pending seeds")
                 return
             }
+            for (const seed of pending) assertSqlOnlyChangesTenant(config, `Seed ${seed.name}`, seed.sql);
             const names = pending.map(seed => seed.name);
             const { commit, rollback } = await tracker.saveSeeds(names, Migration.getPreciseNow());
             if (options.fake) {

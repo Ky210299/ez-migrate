@@ -41,6 +41,14 @@ export class ConsoleLoggerImpl {
         }
     }
 
+    /** Fields added to every line, for example the tenant being migrated */
+    private context: LogFields = {};
+
+    /** Add these fields to every line until it is called again. Without fields it removes them */
+    setContext(fields: LogFields = {}) {
+        this.context = fields;
+    }
+
     isEnabled(level: LogLevel) {
         return LOG_LEVELS.indexOf(level) <= LOG_LEVELS.indexOf(this.level);
     }
@@ -50,8 +58,9 @@ export class ConsoleLoggerImpl {
     info(msg: string, fields?: LogFields) { this.write("info", msg, fields) }
     debug(msg: string, fields?: LogFields) { this.write("debug", msg, fields) }
 
-    private write(level: LogLevel, msg: string, fields?: LogFields) {
+    private write(level: LogLevel, msg: string, lineFields?: LogFields) {
         if (!this.isEnabled(level)) return;
+        const fields = Object.keys(this.context).length ? { ...this.context, ...lineFields } : lineFields;
         const stream = level === "error" || level === "warn" ? process.stderr : process.stdout;
         if (this.format === "json") {
             stream.write(JSON.stringify({ time: new Date().toISOString(), level, msg, ...fields }) + "\n");

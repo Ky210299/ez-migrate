@@ -1,6 +1,6 @@
 import sqlite from "node:sqlite";
 import { mkdirSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { Persistency, TRACKER_SCHEMA, Commit, Rollback, TABLE_NAME, MIGRATION_COLUMNS, migrationValues, SEED_TABLE_NAME, SEED_TRACKER_SCHEMA, saveSeedsStatements } from "./Repository.js";
 import Migration, { MigrationData } from "./Migration.js";
 
@@ -12,7 +12,8 @@ type DBMigrationData =
     Pick<MigrationData, "path" | "up" | "down"> 
     &
     { batch_id: MigrationData["batchId"], migrated_at: MigrationData["migratedAt"] };
-type SqlitePersistencyArguments = { trackerPath: string };
+/** The tracker file: <trackerPath>/tracker.db, or the given file (tenants) */
+type SqlitePersistencyArguments = { trackerPath: string, file?: undefined } | { trackerPath?: undefined, file: string };
 
 function toMigration(m: DBMigrationData) {
     return new Migration({ ...m, batchId: m.batch_id, migratedAt: m.migrated_at });
@@ -42,10 +43,10 @@ export default class SqlitePersistency implements Persistency {
         }
     }
 
-    /** Stores the tracker in <trackerPath>/tracker.db */
-    constructor({ trackerPath }: SqlitePersistencyArguments) {
-        mkdirSync(trackerPath, { recursive: true });
-        const file = join(trackerPath, "tracker.db");
+    /** Stores the tracker in <trackerPath>/tracker.db, or in file */
+    constructor({ trackerPath, file: trackerFile }: SqlitePersistencyArguments) {
+        const file = trackerFile ?? join(trackerPath ?? ".", "tracker.db");
+        mkdirSync(dirname(file), { recursive: true });
         this.db = new sqlite.DatabaseSync(file);
         // Wait instead of failing when another process writes the file at the same time
         this.db.exec("PRAGMA busy_timeout = 5000");

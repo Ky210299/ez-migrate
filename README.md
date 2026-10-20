@@ -15,6 +15,7 @@ You write the SQL. ez-migrate runs it in order, records what was applied, and ca
 - Shows the SQL and asks before running it at the terminal; runs without asking in CI.
 - Lock so several servers can run `migrate` at the same time.
 - Seeds that run once, and `baseline` to adopt an existing database.
+- **Tenants:** the same migrations for many clients, each in its own schema, database, server or SQLite file, with its own history and lock. See [Tenants](#tenants-many-clients).
 - `alter` changes the type of a column (for example to an enum) without losing data: it checks every value and tests the change on a copy of the table before writing the migration.
 - Three runtime dependencies. SQLite uses the `node:sqlite` module of Node.js.
 - **AI friendly:** JSON output, `schema` to read the real schema and `check` to find secrets and risky SQL, so AI coding agents (Claude Code, Cursor, Copilot...) can work with your migrations. ez-migrate never calls an AI model and never sends your schema or data anywhere. See [Use with AI agents](#use-with-ai-agents).
@@ -30,15 +31,16 @@ You write the SQL. ez-migrate runs it in order, records what was applied, and ca
 5. [Commands](#commands)
 6. [Use with AI agents](#use-with-ai-agents)
 7. [Running at the same time](#running-at-the-same-time)
-8. [Edited migrations](#edited-migrations)
-9. [Logs and traces](#logs-and-traces)
-10. [Adopt ez-migrate on an existing database](#adopt-ez-migrate-on-an-existing-database)
-11. [Change a column type (alter)](#change-a-column-type-alter)
-12. [How tracking works](#how-tracking-works)
-13. [Advantages, disadvantages and use cases](#advantages-disadvantages-and-use-cases)
-14. [Development and tests](#development-and-tests)
-15. [Changelog](#changelog)
-16. [License](#license)
+8. [Tenants (many clients)](#tenants-many-clients)
+9. [Edited migrations](#edited-migrations)
+10. [Logs and traces](#logs-and-traces)
+11. [Adopt ez-migrate on an existing database](#adopt-ez-migrate-on-an-existing-database)
+12. [Change a column type (alter)](#change-a-column-type-alter)
+13. [How tracking works](#how-tracking-works)
+14. [Advantages, disadvantages and use cases](#advantages-disadvantages-and-use-cases)
+15. [Development and tests](#development-and-tests)
+16. [Changelog](#changelog)
+17. [License](#license)
 
 ---
 
@@ -276,6 +278,8 @@ By default the history is stored in the table `ez_migration` of the target datab
 
 `status`, `check`, `schema`, `alter` and `--dry-run` take `--json` to print their output as JSON, for scripts and AI agents.
 
+With [tenants](#tenants-many-clients), `--tenant <name>` runs any of these commands for one client, and `--all-tenants` runs `migrate` and `status` for all of them.
+
 The CLI exits with code `0` on success and `1` on any error, so it can stop a deploy script or CI job.
 
 ### Dry run
@@ -392,6 +396,90 @@ Commands that change the database (`migrate`, `up`, `down`, `rollback`, `redo`, 
 - **SQLite tracker:** a file `tracker.db.lock` next to `tracker.db`, with the process id and host. If that process is no longer running on the same host, the file is removed and the lock is taken. A lock file from another host is only removed by hand.
 - The lock is per tracker. Two projects with different tracker databases don't block each other.
 - `status` and `seed --file` don't take the lock.
+
+---
+
+## Tenants (many clients)
+
+For a project where each client has its own copy of the schema: a schema per client in one database, a database per client, a server per client, or a SQLite file per client. The same migration files run for every client, a client can also have its own migrations, and a client that fails doesn't change the others.
+
+Add `tenants` to `ez-migrate.json`:
+
+```json
+{
+    "dialect": "postgres",
+    "migrationsPath": "./migrations",
+    "envKeys": { "user": "DB_USER", "password": "DB_PASSWORD", "port": "DB_PORT", "host": "DB_HOST", "database": "DB_NAME" },
+    "tenants": {
+        "migrationsPath": "./tenants",
+        "list": [
+            { "name": "acme" },
+            { "name": "beta", "schema": "client_beta" },
+            { "name": "gamma", "database": "gamma_db" },
+            { "name": "delta", "url": "DELTA_DB_URL" }
+        ]
+    }
+}
+```
+
+Each tenant has a `name` (letters, numbers, `_` and `-`) and, if needed, where it is:
+
+| Key | PostgreSQL | MySQL | SQLite |
+| --- | --- | --- | --- |
+| nothing | schema `<name>` in the main database | database `<name>` | file `<sqlitePath>/tenants/<name>.db` |
+| `schema` | that schema in the main database | same as `database` | not allowed |
+| `database` | that database on the same server (schema `public`) | that database | path of its file |
+| `url` | name of the env var with its connection URL (another server). It can be used with `schema` / `database` | same | not allowed |
+
+The URL is never written in the config: `url` is the name of an env var. If that env var is empty, the tenant fails; it never falls back to the main database.
+
+The list can come from three places (only one):
+- `"list": [...]` in the config.
+- `"file": "./tenants.json"`: a JSON file with the same array.
+- `"query": "SELECT name, schema FROM clients WHERE active"`: a query on the main database. It returns the columns `name`, `schema`, `database` and `url` (the ones you need). Adding a client is adding a row.
+
+### Commands
+
+| Option | What it does |
+| --- | --- |
+| `--tenant <name>` | Runs the command for that tenant. Works with every command that uses the database (`migrate`, `up`, `down`, `rollback`, `redo`, `reset`, `seed`, `status`, `baseline`, `schema`, `alter`, `check`, `make`). Also the env var `EZ_MIGRATE_TENANT`. |
+| `--tenant a,b` | `migrate` and `status` for those tenants. |
+| `--all-tenants` | `migrate` and `status` for every tenant of the list. |
+| `--continue-on-error` | `migrate` with several tenants: keeps going after a tenant fails. |
+
+```bash
+ez-migrate status --all-tenants                 # one line per tenant: applied, pending, changed
+ez-migrate migrate --all-tenants --dry-run      # the SQL each tenant would run
+ez-migrate migrate --tenant acme                # first one client
+ez-migrate migrate --all-tenants                # then the rest
+ez-migrate make add-vip --tenant acme           # a migration only for acme: tenants/acme/<time>-add-vip.sql
+ez-migrate rollback --tenant acme               # undo only acme
+```
+
+`migrate --all-tenants` prints a summary at the end:
+
+```
+Tenants: 1 done, 1 failed, 1 not run
+✔ acme   2 migrations were applied
+✘ beta   Migration 20261020101500123-vip.sql (up) failed: relation "vip" already exists
+- gamma  not run: an earlier tenant failed (use --continue-on-error to run the rest)
+```
+
+- **Order:** tenants run one after the other, in the order of the list. By default it **stops at the first tenant that fails**, because the same files would likely fail on the next tenants too. Fix it and run again: the tenants that are done have nothing to run. `--continue-on-error` runs the rest. Exit code `1` if a tenant failed.
+- **At the terminal** it shows the files of each tenant and asks once. A tenant whose plan changed while you answered runs nothing.
+- **Without `--tenant` or `--all-tenants`** nothing changes: commands run on the main database, as before.
+
+### Own migrations of a tenant
+
+Files in `<tenants.migrationsPath>/<name>/` (default `./tenants/<name>/`) run only for that tenant, together with the common files in `migrationsPath`, in file name order. The same file name can't be in both folders. Keep these for real differences: the more tenants differ, the harder it is for a common migration to work on all of them. To roll out a risky change, run it first on one tenant (`--tenant acme`) and then on all.
+
+### Isolation
+
+- **History and lock per tenant.** The tracker of a tenant is in the tenant: table `ez_migration` in its schema or database, or the file `<name>.tracker.db` next to its SQLite file. Each tenant has its own lock, so two servers can migrate two tenants at the same time. The `tracker` config is not used for tenants.
+- **PostgreSQL:** the connection uses only the schema of the tenant (`search_path`), and the schema is created if it doesn't exist. Write migrations without a schema name (`CREATE TABLE users`, not `acme.users`). Each migration runs in a transaction: if it fails, that tenant has no changes left.
+- **MySQL:** each tenant is a database. DDL is not atomic, so a migration with several statements that fails can leave that tenant half done (see [How tracking works](#how-tracking-works)). The other tenants are not touched.
+- **Protection:** before running anything, a tenant migration (up and down) or seed is rejected if it would change something outside its tenant: it names the schema or database of another tenant (`beta.orders`), changes an object of another schema (`CREATE TABLE public.x`, `ALTER TABLE x SET SCHEMA y`), or changes the schema or database in use (`SET search_path`, `USE`, `ATTACH`). Reading a shared schema is allowed (`REFERENCES public.plans`, `public.gen_random_uuid()`). `check --tenant <name>` shows the same problems without connecting.
+- **Logs** of a tenant have `tenant=<name>` in every line (and a `tenant` field with `--log-format json`). They never have its URL.
 
 ---
 
@@ -557,7 +645,7 @@ Limits:
 ## Advantages, disadvantages and use cases
 
 This section is updated with each version, based on what the tests and real use show.
-*Last review: 0.15.0.*
+*Last review: 0.16.0.*
 
 ### Advantages
 
@@ -576,6 +664,7 @@ This section is updated with each version, based on what the tests and real use 
 - **Easy to adopt.** `baseline` turns an existing database into a first migration in one command, on all three DBMS, including triggers, functions, procedures, sequences and partitions. The current data can be exported too, to a folder that git ignores, and loads with the same result as the original. Tested on the Sakila, Pagila, Chinook and Northwind sample databases.
 - **Works with branches.** Migrations merged later with an older name are still applied.
 - **Safe column type changes.** `alter` checks every value, tests the migration (up and down) on a copy of the table and writes it only if no value is lost. The migration checks the values again on each database, so production is not changed if it has other values. Enums work the same on the three DBMS.
+- **Many clients.** With `tenants`, the same files migrate a schema, database, server or SQLite file per client, each with its own history and lock. The list can come from a query, so a new client is a new row. A client that fails doesn't change the others, migrations that would touch another client are rejected before running, and `status --all-tenants` shows who is behind.
 - **Script and AI friendly.** Exit code `1` on errors, `--json` output, `schema` to read the real schema and `check` to find secrets and risky SQL before running. AI agents can write and review migrations without ez-migrate sending anything to a model.
 
 ### Disadvantages
@@ -587,6 +676,8 @@ This section is updated with each version, based on what the tests and real use 
 - **Edited seeds don't run again.** A seed is recorded by file name. If you change a seed that already ran, create a new seed file or use `seed --all`.
 - **`baseline` has limits.** It doesn't export permissions, row level security policies or other PostgreSQL schemas, and `--data` loads all rows in memory, so it is not for big databases.
 - **SQL is not portable.** A migration written for PostgreSQL may not run on MySQL.
+- **Tenants run one after the other.** 1,000 tenants take 1,000 times one tenant. There are no groups of tenants yet (a migration for "all premium clients"), and `rollback` runs for one tenant at a time.
+- **The tenant protection uses patterns.** A table alias with the same name as another tenant's schema (`beta.id` where `beta` is a table) is rejected; rename the alias. Changes inside a function body are only checked for names of other tenants.
 - **Not 1.0 yet.** The config and the CLI may still change between minor versions. Read the changelog before updating.
 - **CLI only.** There is no JavaScript API to run migrations from code.
 - **Needs Node.js 22.13+**.
@@ -603,6 +694,7 @@ This section is updated with each version, based on what the tests and real use 
 - Projects where AI agents write migrations: `schema`, `check` and `--dry-run --json` let the agent work from the real schema and let a person see the SQL before it runs.
 - Prototypes with SQLite that may move to PostgreSQL later (with SQL rewritten where needed).
 - Starting with simple types (`VARCHAR`) and moving to better ones later (enums, smaller types), with `alter` checking that no value is lost.
+- SaaS with one schema, database or SQLite file per client (tens to a few hundred clients), including clients with a few own migrations.
 
 ### Not recommended
 
@@ -612,7 +704,8 @@ This section is updated with each version, based on what the tests and real use 
 - Running migrations from application code.
 - Copying big production databases with `baseline --data`. Use the DBMS backup tools for the data.
 - Changing the type of columns of very big, busy MySQL tables: the `ALTER` locks the table while it copies it.
-- PostgreSQL databases split in several schemas, or that depend on permissions and row level security in the migrations.
+- PostgreSQL databases split in several schemas that reference and change each other (other than one schema per tenant), or that depend on permissions and row level security in the migrations.
+- Thousands of tenants that must be migrated in a few minutes: tenants run one at a time.
 
 ---
 
@@ -626,7 +719,7 @@ pnpm run lint
 pnpm run db:down
 ```
 
-Tests run the built CLI against real databases: every command on MySQL, PostgreSQL and SQLite, and with the tracker on a different DBMS. CI runs the same on every push and pull request.
+Tests run the built CLI against real databases: every command on MySQL, PostgreSQL and SQLite, with the tracker on a different DBMS, and with tenants (schemas, databases, URLs and SQLite files). CI runs the same on every push and pull request.
 
 Contributions: create a branch, add a test for your change, add an entry to [CHANGELOG.md](https://github.com/Ky210299/ez-migrate/blob/main/CHANGELOG.md) and open a pull request. Guidelines for coding agents are in [.github/AGENTS.md](https://github.com/Ky210299/ez-migrate/blob/main/.github/AGENTS.md).
 

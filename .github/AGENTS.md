@@ -151,6 +151,14 @@ export default class Make {
 - `migrate` and `up` call `SchemasHandler.checkAppliedUnchanged` before applying anything.
 - Tests for locks, SSL and changed migrations are in `tests/safety.test.ts`. The SSL users and test certificate are in `tests/fixtures/`.
 
+### Tenants
+- `src/Tenants.ts` has no I/O: it validates and fills each tenant (`resolveTenant`), gives its connection data (`tenantConnection`), and has `crossTenantProblem`, the check that a migration only changes its tenant. `src/TenantRunner.ts` loads the list (`list`, `file` or `query`), reads `--tenant` / `--all-tenants` in the CLI `preAction` hook (`prepareTenants`), and runs a plan for several tenants (`runPlanForTenants`).
+- One tenant (`--tenant a`): `ConfigReader` sets `config.tenant`, and `ConnectionFactory`, `TrackerFactory` and `SchemasHandler.forConfig` use it. So every command works for one tenant without its own code. Always build a `SchemasHandler` with `forConfig(config)`, never from `config.migrationsPath` alone.
+- Several tenants (`--all-tenants`, `--tenant a,b`): only `migrate` and `status` (`MULTI_TENANT_COMMANDS`). They loop with `configForTenant(base, tenant)`.
+- The tracker of a tenant is always in the tenant (same schema, database, or `<name>.tracker.db`). With a PostgreSQL schema, `useSchema` sets `search_path` on the target and the tracker, and the advisory lock key uses `hashtext(schema)`. Without a tenant the lock key and every behavior must stay as before.
+- Without `--tenant` / `--all-tenants`, a config with `tenants` behaves exactly as before. Keep a test for that.
+- Tests are in `tests/tenants.test.ts` (every case on the three DBMS).
+
 ### Output for scripts and AI agents
 - `--json` output (`status`, `check`, `schema`, `--dry-run`) is the command output: one JSON object on stdout with `console.log`. Logs stay on stdout/stderr through the logger as usual; tests parse from the first `{`.
 - `check` (`src/Checker.ts`) never connects to the database and never prints the value of a secret: only file, line and rule. Add new rules there with a test in `tests/agents.test.ts`.

@@ -103,7 +103,7 @@ function envKeys(keyPrefix: string) {
     };
 }
 
-async function queryOn(dialect: Dialect, database: string, sqliteFile: string, sql: string): Promise<Rows> {
+export async function queryOn(dialect: Dialect, database: string, sqliteFile: string, sql: string): Promise<Rows> {
     if (dialect === "sqlite") {
         const db = new DatabaseSync(sqliteFile);
         try {
@@ -146,7 +146,7 @@ export async function createSslUser(dialect: "mysql" | "postgres") {
     }
 }
 
-async function createDatabase(dialect: Dialect, database: string) {
+export async function createDatabase(dialect: Dialect, database: string) {
     if (dialect === "mysql") {
         const c = await createConnection({ ...DB.mysql });
         await c.query(`CREATE DATABASE IF NOT EXISTS ${database}`);
@@ -160,7 +160,7 @@ async function createDatabase(dialect: Dialect, database: string) {
     }
 }
 
-async function dropDatabase(dialect: Dialect, database: string) {
+export async function dropDatabase(dialect: Dialect, database: string) {
     if (dialect === "mysql") {
         const c = await createConnection({ ...DB.mysql });
         await c.query(`DROP DATABASE IF EXISTS ${database}`);

@@ -37,7 +37,7 @@ export async function ask(question: string): Promise<boolean> {
 }
 
 /** Text that is the same for two plans only if they run the same migrations in the same order */
-function planKey(plan: Plan): string {
+export function planKey(plan: Plan): string {
     return plan.flatMap(step => step.migrations.map(m => `${step.direction} ${m.getDetails().path}`)).join("\n");
 }
 

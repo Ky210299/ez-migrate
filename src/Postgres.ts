@@ -5,6 +5,50 @@ import { ConsoleLoggerImpl } from "./Logger";
 import { PostgresConnection, Row } from "./DatabaseConnector";
 import { describeTarget } from "./utils";
 
+/**
+ * Postgres error codes when a database or schema is created by another process
+ * at the same time: "already exists", or a unique violation in the catalog
+ */
+const CREATED_AT_SAME_TIME = new Set(["42P04", "42P06", "23505"]);
+
+function createdAtSameTime(err: unknown) {
+    return CREATED_AT_SAME_TIME.has((err as { code?: string }).code ?? "");
+}
+
+/** Create the database if it doesn't exist. Returns true if it was created */
+export async function createDatabaseIfMissing(admin: Client, database: string): Promise<boolean> {
+    const { rowCount } = await admin.query("SELECT 1 FROM pg_database WHERE datname = $1", [database]);
+    if (rowCount) return false;
+    try {
+        await admin.query(`CREATE DATABASE "${database.replace(/"/g, '""')}"`);
+        return true;
+    } catch (err) {
+        if (createdAtSameTime(err)) return false;
+        throw err;
+    }
+}
+
+/**
+ * Create the schema if it doesn't exist and make it the only schema of the
+ * session, so the migrations create and find their objects only there.
+ * Returns true if it was created.
+ */
+export async function useSchema(client: Client, schema: string): Promise<boolean> {
+    const quoted = `"${schema.replace(/"/g, '""')}"`;
+    let created = false;
+    const { rowCount } = await client.query("SELECT 1 FROM pg_namespace WHERE nspname = $1", [schema]);
+    if (!rowCount) {
+        try {
+            await client.query(`CREATE SCHEMA ${quoted}`);
+            created = true;
+        } catch (err) {
+            if (!createdAtSameTime(err)) throw err;
+        }
+    }
+    await client.query(`SET search_path TO ${quoted}`);
+    return created;
+}
+
 export default class PostgresConnectionImpl implements PostgresConnection{
     readonly DBMSName: string = "postgres";
     readonly host: string;
@@ -13,6 +57,8 @@ export default class PostgresConnectionImpl implements PostgresConnection{
     database: string | undefined;
     readonly port: string | number;
     readonly ssl: TlsOptions | undefined;
+    /** Schema of a tenant. Undefined: the default schema of the database */
+    readonly schema: string | undefined;
     readonly logger: ConsoleLoggerImpl;
     
     private client: Client | null = null;
@@ -24,14 +70,16 @@ export default class PostgresConnectionImpl implements PostgresConnection{
         database,
         host,
         ssl,
+        schema,
         logger,
-    }: ConnectionData & { logger: ConsoleLoggerImpl }) {
+    }: ConnectionData & { schema?: string, logger: ConsoleLoggerImpl }) {
         this.host = host ?? "localhost";
         this.user = user ?? "postgres";
         this.password = password ?? "";
         this.port = port ?? 5432;
         this.database = database;
         this.ssl = ssl;
+        this.schema = schema;
         this.logger = logger;
     }
 
@@ -56,23 +104,28 @@ export default class PostgresConnectionImpl implements PostgresConnection{
         const admin = this.newClient("postgres");
         await admin.connect();
         try {
-            const { rowCount } = await admin.query("SELECT 1 FROM pg_database WHERE datname = $1", [this.database]);
-            if (!rowCount) {
-                await admin.query(`CREATE DATABASE "${this.database.replace(/"/g, '""')}"`);
-                this.logger.info(`"${this.database}" database created`);
-            }
+            if (await createDatabaseIfMissing(admin, this.database)) this.logger.info(`"${this.database}" database created`);
         } finally {
             await admin.end();
         }
         const client = this.newClient(this.database);
         await client.connect();
+        if (this.schema != null) {
+            try {
+                if (await useSchema(client, this.schema)) this.logger.info(`Schema ${this.schema} created`);
+            } catch (err) {
+                await client.end().catch(() => {});
+                throw err;
+            }
+        }
         this.client = client;
         return client;
     }
 
     async init(migrationPath?: string, migrationDirection?: string) {
         await this.connect();
-        this.logger.info(describeTarget(this.database, migrationPath, migrationDirection));
+        const target = this.schema != null ? `${this.database} (schema ${this.schema})` : this.database;
+        this.logger.info(describeTarget(target, migrationPath, migrationDirection));
     }
 
     async isConnected(): Promise<boolean> {

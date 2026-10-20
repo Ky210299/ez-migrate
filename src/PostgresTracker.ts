@@ -6,11 +6,10 @@ import { Persistency, TRACKER_SCHEMA, Commit, Rollback, TABLE_NAME, EXPECTED_SCH
 import Migration, { MigrationData } from "./Migration.js";
 import { MigrateError } from "./Errors.js";
 import DialectTranslator, { TranslatableKeyword } from "./DialectTraductor.js";
+import { createDatabaseIfMissing, useSchema } from "./Postgres.js";
 
 /** Key of the advisory lock. Advisory locks are per database, so it is per tracker database */
 const LOCK_KEY = [0x657a, 0x6d67] as const;
-/** Postgres error code when a database already exists (created by another process at the same time) */
-const DUPLICATE_DATABASE = "42P04";
 
 type DBMigrationData =
     Pick<MigrationData, "path" | "up" | "down">
@@ -31,17 +30,20 @@ export default class PGTracker implements Persistency {
     readonly database: string;
     readonly port: number;
     readonly ssl: TlsOptions | undefined;
+    /** Schema of a tenant: the tracker tables and the lock are per schema */
+    readonly schema: string | undefined;
     private db: Client | null = null;
     private schemaReady = false;
     private locked = false;
 
-    constructor({ user, password, port, host, database, ssl }: ConnectionData) {
+    constructor({ user, password, port, host, database, ssl, schema }: ConnectionData & { schema?: string }) {
         this.host = host ?? "localhost";
         this.user = user ?? "postgres";
         this.password = password ?? "";
         this.port = port ?? 5432;
         this.database = database ?? "postgres";
         this.ssl = ssl;
+        this.schema = schema;
     }
 
     private newClient(database: string) {
@@ -66,15 +68,7 @@ export default class PGTracker implements Persistency {
         const admin = this.newClient("postgres");
         await admin.connect();
         try {
-            const { rowCount } = await admin.query("SELECT 1 FROM pg_database WHERE datname = $1", [this.database]);
-            if (!rowCount) {
-                try {
-                    await admin.query(`CREATE DATABASE "${this.database.replace(/"/g, '""')}"`);
-                    consoleLogger.info(`"${this.database}" database created`)
-                } catch (err) {
-                    if ((err as { code?: string }).code !== DUPLICATE_DATABASE) throw err;
-                }
-            }
+            if (await createDatabaseIfMissing(admin, this.database)) consoleLogger.info(`"${this.database}" database created`);
         } finally {
             await admin.end();
         }
@@ -104,6 +98,14 @@ export default class PGTracker implements Persistency {
         await this.ensureTrackerDatabase();
         const client = this.newClient(this.database);
         await client.connect();
+        if (this.schema != null) {
+            try {
+                await useSchema(client, this.schema);
+            } catch (err) {
+                await client.end().catch(() => {});
+                throw err;
+            }
+        }
         this.db = client;
     }
 
@@ -115,10 +117,21 @@ export default class PGTracker implements Persistency {
         this.schemaReady = true;
     }
 
+    /**
+     * Without a schema the lock is the same as in older versions. With a schema
+     * its second key comes from the schema name, so tenants don't wait for each other
+     */
+    private get lockArgs() {
+        return this.schema == null ? "$1, $2" : "$1, hashtext($2)";
+    }
+    private get lockValues(): Array<number | string> {
+        return this.schema == null ? [...LOCK_KEY] : [LOCK_KEY[0], this.schema];
+    }
+
     async lock(timeoutMs: number) {
         await this.connect();
         await acquireWithRetry(async () => {
-            const { rows } = await this.client.query("SELECT pg_try_advisory_lock($1, $2) AS got", [...LOCK_KEY]);
+            const { rows } = await this.client.query(`SELECT pg_try_advisory_lock(${this.lockArgs}) AS got`, this.lockValues);
             return rows[0].got === true;
         }, timeoutMs);
         this.locked = true;
@@ -127,7 +140,7 @@ export default class PGTracker implements Persistency {
     async unlock() {
         if (!this.locked || this.db == null) return;
         this.locked = false;
-        await this.client.query("SELECT pg_advisory_unlock($1, $2)", [...LOCK_KEY]);
+        await this.client.query(`SELECT pg_advisory_unlock(${this.lockArgs})`, this.lockValues);
     }
 
     /** Begins a transaction, runs the statement and returns the commit and rollback functions */

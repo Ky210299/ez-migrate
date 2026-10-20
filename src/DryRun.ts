@@ -16,11 +16,12 @@ function count(n: number) {
     return n === 1 ? "1 migration" : `${n} migrations`;
 }
 
-/** "2 migrations would be reverted and 3 applied" */
-function summary(plan: Plan, verb: string): string {
+/** "2 migrations would be reverted and 3 applied". The verb can depend on the number ("was" or "were") */
+export function planSummary(plan: Plan, verb: string | ((n: number) => string)): string {
     const parts = plan.filter(step => step.migrations.length > 0).map((step, i) => {
         const action = step.direction === "up" ? "applied" : "reverted";
-        return i === 0 ? `${count(step.migrations.length)} ${verb} ${action}` : `${step.migrations.length} ${action}`;
+        const n = step.migrations.length;
+        return i === 0 ? `${count(n)} ${typeof verb === "string" ? verb : verb(n)} ${action}` : `${n} ${action}`;
     });
     return parts.join(" and ");
 }
@@ -52,12 +53,12 @@ export function printDryRun(dialect: string, plan: Plan) {
         console.log(`-- Dry run: no migration would be ${action}`);
         return;
     }
-    console.log([`-- Dry run: nothing was run. ${summary(plan, "would be")}, in this order:`, ...planSQL(dialect, plan)].join("\n"));
+    console.log([`-- Dry run: nothing was run. ${planSummary(plan, "would be")}, in this order:`, ...planSQL(dialect, plan)].join("\n"));
 }
 
 /** Print the SQL that a command is about to run, before asking to run it */
 export function printPlan(dialect: string, plan: Plan) {
-    console.log([`-- ${summary(plan, "will be")}, in this order:`, ...planSQL(dialect, plan)].join("\n"));
+    console.log([`-- ${planSummary(plan, "will be")}, in this order:`, ...planSQL(dialect, plan)].join("\n"));
 }
 
 /**
@@ -65,7 +66,12 @@ export function printPlan(dialect: string, plan: Plan) {
  * `{ dryRun, steps: [{ direction, migrations: [{ file, sql, notAtomic }] }] }`
  */
 export function printDryRunJson(dialect: string, plan: Plan) {
-    const steps = plan.map(({ direction, migrations }) => ({
+    console.log(JSON.stringify({ dryRun: true, steps: dryRunSteps(dialect, plan) }, null, 2));
+}
+
+/** The steps of the plan for JSON: `[{ direction, migrations: [{ file, sql, notAtomic }] }]` */
+export function dryRunSteps(dialect: string, plan: Plan) {
+    return plan.map(({ direction, migrations }) => ({
         direction,
         migrations: migrations.map(migration => {
             const details = migration.getDetails();
@@ -73,5 +79,4 @@ export function printDryRunJson(dialect: string, plan: Plan) {
             return { file: basename(details.path), sql, notAtomic: nonAtomicWarning(dialect, sql) };
         }),
     }));
-    console.log(JSON.stringify({ dryRun: true, steps }, null, 2));
 }
